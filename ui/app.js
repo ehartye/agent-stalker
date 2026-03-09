@@ -59,6 +59,16 @@ function sessionLastEvent(s) {
   return d.toLocaleDateString() + ' ' + d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
 }
 
+function getAgentLabel(agentId) {
+  if (agentId === '__top_level__') return 'Claude (session)';
+  for (const sid of state.selectedSessionIds) {
+    const agents = state.sessionAgents[sid] || [];
+    const a = agents.find(a => a.id === agentId);
+    if (a) return a.agent_type || a.id.slice(0, 12);
+  }
+  return agentId;
+}
+
 // --- State ---
 
 const API = '';
@@ -73,12 +83,13 @@ const state = {
   stats: {},
   searchText: '',
   sessionSearchText: '',
-  toolChipFilter: '',
-  agentFilter: null,
-  agentFilterLabel: null,
-  agentFilterColor: null,
+  agentFilters: new Set(),
+  toolChipFilters: new Set(),
+  eventTypeFilters: new Set(),
   isLive: true,
   lastTimestamp: 0,
+  eventsFullyLoaded: false,
+  loadingMore: false,
 };
 
 // --- API ---
@@ -119,24 +130,53 @@ async function loadSessionDetails() {
   renderKanban();
 }
 
+const EVENTS_PAGE_SIZE = 500;
+
 async function loadEvents() {
   const ids = [...state.selectedSessionIds];
   if (ids.length === 0) {
     state.events = [];
+    state.eventsFullyLoaded = false;
     renderActivity();
     return;
   }
-  const promises = ids.map(id => {
-    const url = `/api/events?limit=500&session=${id}`;
-    return fetchJSON(url);
-  });
+  const promises = ids.map(id => fetchJSON(`/api/events?limit=${EVENTS_PAGE_SIZE}&session=${id}`));
   const results = await Promise.all(promises);
-  state.events = results.flat().filter(Boolean).sort((a, b) => a.timestamp - b.timestamp);
+  const allEvents = results.flat().filter(Boolean);
+  state.events = allEvents.sort((a, b) => a.timestamp - b.timestamp);
+  state.eventsFullyLoaded = allEvents.length < EVENTS_PAGE_SIZE * ids.length;
   if (state.events.length > 0) {
     state.lastTimestamp = Math.max(...state.events.map(e => e.timestamp || 0));
   }
   renderChipBar();
   renderActivity();
+}
+
+async function loadMoreEvents() {
+  if (state.loadingMore || state.eventsFullyLoaded) return;
+  state.loadingMore = true;
+  const ids = [...state.selectedSessionIds];
+  const currentCount = state.events.length;
+  const perSession = Math.ceil(currentCount / Math.max(ids.length, 1));
+  const promises = ids.map(id =>
+    fetchJSON(`/api/events?limit=${EVENTS_PAGE_SIZE}&offset=${perSession}&session=${id}`)
+  );
+  const results = await Promise.all(promises);
+  const olderEvents = results.flat().filter(Boolean);
+  if (olderEvents.length === 0) {
+    state.eventsFullyLoaded = true;
+  } else {
+    const existingIds = new Set(state.events.map(e => e.id));
+    const deduped = olderEvents.filter(e => !existingIds.has(e.id));
+    if (deduped.length === 0) {
+      state.eventsFullyLoaded = true;
+    } else {
+      state.events = state.events.concat(deduped).sort((a, b) => a.timestamp - b.timestamp);
+      renderChipBar();
+      renderActivity();
+    }
+  }
+  state.loadingMore = false;
 }
 
 async function loadTools() {
@@ -218,9 +258,10 @@ function renderSessionList(listId, sessions, countId, isArchived) {
       const sid = cb.dataset.session;
       if (cb.checked) state.selectedSessionIds.add(sid);
       else state.selectedSessionIds.delete(sid);
-      state.agentFilter = null;
-      state.agentFilterLabel = null;
-      state.agentFilterColor = null;
+      state.agentFilters.clear();
+      state.toolChipFilters.clear();
+      state.eventTypeFilters.clear();
+      state.eventsFullyLoaded = false;
       renderSessionDropdown();
       loadSessionDetails();
       loadEvents();
@@ -290,10 +331,19 @@ function renderChipBar() {
     .slice(0, 10)
     .map(([name, count]) => ({ name, count }));
 
-  let html = '<span class="chip-bar-label">Agents</span>';
+  // Collect event types from loaded events
+  const eventTypeCounts = {};
+  state.events.forEach(e => {
+    if (e.hook_event_name) eventTypeCounts[e.hook_event_name] = (eventTypeCounts[e.hook_event_name] || 0) + 1;
+  });
+  const eventTypes = Object.entries(eventTypeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ name, count }));
+
+  let html = '<div class="chip-bar-group"><span class="chip-bar-label">Agents</span>';
 
   // Top-level Claude chip
-  const topActive = state.agentFilter === '__top_level__' ? ' active' : '';
+  const topActive = state.agentFilters.has('__top_level__') ? ' active' : '';
   html += `<div class="agent-chip${topActive}" data-agent-chip="__top_level__" data-agent-label="Claude (session)" data-agent-color="${agentColor('__top_level__')}">
     <span class="dot" style="background:${agentColor('__top_level__')}"></span>Claude
   </div>`;
@@ -301,44 +351,72 @@ function renderChipBar() {
   agents.forEach(a => {
     const aName = a.agent_type || a.id.slice(0, 12);
     const aColor = a.color ? namedColor(a.color) : agentColor(aName);
-    const isActive = state.agentFilter === a.id ? ' active' : '';
+    const isActive = state.agentFilters.has(a.id) ? ' active' : '';
     html += `<div class="agent-chip${isActive}" data-agent-chip="${esc(a.id)}" data-agent-label="${esc(aName)}" data-agent-color="${aColor}" style="${isActive ? `border-color:${aColor};color:${aColor};background:${aColor}18` : ''}">
       <span class="dot" style="background:${aColor}"></span>${esc(aName)}
     </div>`;
   });
 
-  html += '<span class="chip-bar-divider"></span>';
-  html += '<span class="chip-bar-label">Tools</span>';
+  html += '</div><span class="chip-bar-divider"></span>';
+  html += '<div class="chip-bar-group"><span class="chip-bar-label">Tools</span>';
 
   topTools.forEach(t => {
-    const isActive = state.toolChipFilter === t.name ? ' active' : '';
+    const isActive = state.toolChipFilters.has(t.name) ? ' active' : '';
     html += `<div class="tool-chip${isActive}" data-tool-chip="${esc(t.name)}">${esc(t.name)} <span style="opacity:0.5">${t.count}</span></div>`;
   });
 
-  if (state.agentFilter || state.toolChipFilter) {
+  html += '</div><span class="chip-bar-divider"></span>';
+  html += '<div class="chip-bar-group"><span class="chip-bar-label">Events</span>';
+
+  eventTypes.forEach(t => {
+    const isActive = state.eventTypeFilters.has(t.name) ? ' active' : '';
+    html += `<div class="event-chip${isActive}" data-event-chip="${esc(t.name)}">${esc(t.name)} <span style="opacity:0.5">${t.count}</span></div>`;
+  });
+
+  html += '</div>';
+
+  const hasFilters = state.agentFilters.size > 0 || state.toolChipFilters.size > 0 || state.eventTypeFilters.size > 0;
+  if (hasFilters) {
     html += `<div class="chip-clear" id="chipClearAll">Clear</div>`;
   }
 
   bar.innerHTML = html;
 
+  // Agent chip click — toggle in set
   bar.querySelectorAll('[data-agent-chip]').forEach(chip => {
     chip.addEventListener('click', () => {
       const agentId = chip.dataset.agentChip;
-      if (state.agentFilter === agentId) {
-        state.agentFilter = null; state.agentFilterLabel = null; state.agentFilterColor = null;
+      if (state.agentFilters.has(agentId)) {
+        state.agentFilters.delete(agentId);
       } else {
-        state.agentFilter = agentId;
-        state.agentFilterLabel = chip.dataset.agentLabel || agentId;
-        state.agentFilterColor = chip.dataset.agentColor || null;
+        state.agentFilters.add(agentId);
       }
       renderChipBar(); renderKanban(); renderActivity();
     });
   });
 
+  // Tool chip click — toggle in set
   bar.querySelectorAll('[data-tool-chip]').forEach(chip => {
     chip.addEventListener('click', () => {
       const toolName = chip.dataset.toolChip;
-      state.toolChipFilter = state.toolChipFilter === toolName ? '' : toolName;
+      if (state.toolChipFilters.has(toolName)) {
+        state.toolChipFilters.delete(toolName);
+      } else {
+        state.toolChipFilters.add(toolName);
+      }
+      renderChipBar(); renderActivity();
+    });
+  });
+
+  // Event type chip click — toggle in set
+  bar.querySelectorAll('[data-event-chip]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const eventType = chip.dataset.eventChip;
+      if (state.eventTypeFilters.has(eventType)) {
+        state.eventTypeFilters.delete(eventType);
+      } else {
+        state.eventTypeFilters.add(eventType);
+      }
       renderChipBar(); renderActivity();
     });
   });
@@ -346,8 +424,9 @@ function renderChipBar() {
   const clearBtn = document.getElementById('chipClearAll');
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
-      state.agentFilter = null; state.agentFilterLabel = null; state.agentFilterColor = null;
-      state.toolChipFilter = '';
+      state.agentFilters.clear();
+      state.toolChipFilters.clear();
+      state.eventTypeFilters.clear();
       renderChipBar(); renderKanban(); renderActivity();
     });
   }
@@ -362,9 +441,9 @@ function renderKanban() {
   let allTasks = [];
   ids.forEach(sid => { allTasks = allTasks.concat(state.sessionTasks[sid] || []); });
 
-  if (state.agentFilter && state.agentFilter !== '__top_level__') {
-    const label = state.agentFilterLabel || '';
-    allTasks = allTasks.filter(t => t.owner === label);
+  if (state.agentFilters.size > 0) {
+    const labels = new Set([...state.agentFilters].map(id => getAgentLabel(id)));
+    allTasks = allTasks.filter(t => t.owner && labels.has(t.owner));
   }
 
   const pending = allTasks.filter(t => t.status === 'pending');
@@ -431,14 +510,22 @@ function renderActivity() {
   const panel = document.getElementById('activityPanel');
   let events = [...state.events];
 
-  if (state.agentFilter) {
-    events = state.agentFilter === '__top_level__'
-      ? events.filter(e => !e.agent_id)
-      : events.filter(e => e.agent_id === state.agentFilter);
+  // Agent filter (OR within selected agents)
+  if (state.agentFilters.size > 0) {
+    events = events.filter(e => {
+      if (state.agentFilters.has('__top_level__') && !e.agent_id) return true;
+      return state.agentFilters.has(e.agent_id);
+    });
   }
 
-  if (state.toolChipFilter) {
-    events = events.filter(e => e.tool_name === state.toolChipFilter);
+  // Tool filter (OR within selected tools)
+  if (state.toolChipFilters.size > 0) {
+    events = events.filter(e => state.toolChipFilters.has(e.tool_name));
+  }
+
+  // Event type filter (OR within selected types)
+  if (state.eventTypeFilters.size > 0) {
+    events = events.filter(e => state.eventTypeFilters.has(e.hook_event_name));
   }
 
   if (state.searchText) {
@@ -525,12 +612,39 @@ function renderActivity() {
       const e = group.event;
       const agentName = e.agent_type || (e.agent_id ? e.agent_id.slice(0, 12) : '');
       const aColor = agentName ? agentColor(agentName) : 'var(--text-dim)';
-      html += `<div class="standalone-event">
-        <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
-        ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
-        <span style="flex:1"></span>
-        <span class="tool-card-time">${formatTime(e.timestamp)}</span>
-      </div>`;
+      let dataSummary = '';
+      let hasData = false;
+      if (e.data) {
+        try {
+          const d = JSON.parse(e.data);
+          if (d && typeof d === 'object' && Object.keys(d).length > 0) {
+            hasData = true;
+            dataSummary = JSON.stringify(d, null, 2).slice(0, 500);
+          }
+        } catch {}
+      }
+      if (hasData) {
+        html += `<div class="tool-card" style="border-left-color:${aColor}">
+          <div class="tool-card-header" data-toggle-group="${gi}">
+            <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
+            <span class="tool-card-summary">${esc(getEventSummary(e))}</span>
+            ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
+            <span style="flex:1"></span>
+            <span class="tool-card-time">${formatTime(e.timestamp)}</span>
+          </div>
+          <div class="tool-card-body">
+            <div class="tool-card-section"><div class="tool-card-section-label">Data</div><div class="tool-card-section-value">${esc(dataSummary)}</div></div>
+            <span class="tool-card-detail-link" data-detail-id="${esc(e.id)}">View full detail &#8594;</span>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="standalone-event">
+          <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
+          ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
+          <span style="flex:1"></span>
+          <span class="tool-card-time">${formatTime(e.timestamp)}</span>
+        </div>`;
+      }
     }
   });
 
@@ -545,9 +659,24 @@ function renderActivity() {
     link.addEventListener('click', (e) => { e.stopPropagation(); showEventModal(link.dataset.detailId); });
   });
 
-  if (state.isLive) {
-    const scroll = document.getElementById('activityScroll');
-    if (scroll) scroll.scrollTop = scroll.scrollHeight;
+  // Scroll to bottom in live mode, attach lazy-load listener
+  const scroll = document.getElementById('activityScroll');
+  if (scroll) {
+    if (state.isLive) scroll.scrollTop = scroll.scrollHeight;
+    scroll.addEventListener('scroll', onActivityScroll);
+  }
+}
+
+function onActivityScroll() {
+  const scroll = document.getElementById('activityScroll');
+  if (!scroll) return;
+  if (scroll.scrollTop < 100 && !state.eventsFullyLoaded && !state.loadingMore) {
+    const prevHeight = scroll.scrollHeight;
+    loadMoreEvents().then(() => {
+      // Preserve scroll position after prepending older events
+      const newHeight = scroll.scrollHeight;
+      scroll.scrollTop += newHeight - prevHeight;
+    });
   }
 }
 
@@ -577,7 +706,7 @@ async function showEventModal(eventId) {
 }
 
 function renderEventModal(event) {
-  document.getElementById('modalTitle').textContent = `Event #${event.id} — ${event.hook_event_name}`;
+  document.getElementById('modalTitle').textContent = `Event #${event.id} \u2014 ${event.hook_event_name}`;
   let parsed = null;
   try { parsed = event.data ? JSON.parse(event.data) : null; } catch {}
 
@@ -602,10 +731,11 @@ function renderEventModal(event) {
       html += `<div class="modal-json"><details open><summary>tool_response</summary><div class="json-viewer">${syntaxHighlight(JSON.stringify(parsed.tool_response, null, 2))}</div></details></div>`;
     }
     const shown = new Set(['tool_input', 'tool_response']);
-    const rest = Object.fromEntries(Object.entries(parsed).filter(([k]) => !shown.has(k)));
-    if (Object.keys(rest).length > 0) {
-      html += `<div class="modal-json"><details><summary>other data</summary><div class="json-viewer">${syntaxHighlight(JSON.stringify(rest, null, 2))}</div></details></div>`;
-    }
+    const rest = Object.entries(parsed).filter(([k]) => !shown.has(k));
+    rest.forEach(([key, value]) => {
+      const display = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      html += `<div class="modal-json"><details open><summary>${esc(key)}</summary><div class="json-viewer">${syntaxHighlight(display)}</div></details></div>`;
+    });
   }
   document.getElementById('modalBody').innerHTML = html;
 }
@@ -635,7 +765,7 @@ async function showTaskModal(taskId) {
   </div>`;
 
   if (task.description) {
-    html += `<div style="padding:12px 16px;font-size:12px;color:var(--text-secondary);border-bottom:1px solid var(--border)">${esc(task.description)}</div>`;
+    html += `<div style="padding:12px 16px;font-size:15px;color:var(--text-secondary);border-bottom:1px solid var(--border)">${esc(task.description)}</div>`;
   }
   if (task.blocks && task.blocks !== '[]') {
     html += `<div class="modal-json"><details open><summary>Blocks</summary><div class="json-viewer">${syntaxHighlight(task.blocks)}</div></details></div>`;

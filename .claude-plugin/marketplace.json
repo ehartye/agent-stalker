@@ -1,0 +1,15 @@
+{
+  "name": "agent-stalker-dev",
+  "description": "Local development marketplace for agent-stalker plugin",
+  "owner": {
+    "name": "ehart"
+  },
+  "plugins": [
+    {
+      "name": "agent-stalker",
+      "description": "Track agent team task assignment, messages, and tool use across Claude Code sessions",
+      "version": "0.2.0",
+      "source": "./"
+    }
+  ]
+}
