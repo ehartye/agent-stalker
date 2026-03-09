@@ -510,7 +510,7 @@ select.filter-select:focus { border-color: var(--accent-green); }
 
 .event-row {
   display: grid;
-  grid-template-columns: 80px 110px 100px 120px 1fr;
+  grid-template-columns: 80px 60px 110px 100px 120px 1fr;
   gap: 8px;
   align-items: center;
   padding: 5px 8px;
@@ -1233,8 +1233,10 @@ function renderEvents() {
         else if (d.source) summary = d.source;
       } catch {}
     }
+    const sessionShort = esc((e.session_id || '').slice(0, 8));
     return `<div class="event-row" data-id="${esc(e.id)}">
       <span class="time">${formatTime(e.timestamp)}</span>
+      <span class="session-indicator" title="${esc(e.session_id)}" style="font-size:10px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sessionShort}</span>
       <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
       <span class="tool">${esc(tool)}</span>
       <span class="agent-badge">${esc(agent) || '&mdash;'}</span>
