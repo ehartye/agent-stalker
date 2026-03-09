@@ -1,6 +1,5 @@
-import { getDb } from "../lib/db";
-import { closeDb } from "../lib/db";
-import { join } from "path";
+import { getDb, closeDb } from "../lib/db";
+import { join, resolve } from "path";
 import { existsSync } from "fs";
 
 const port = parseInt(process.argv.find((_, i, a) => a[i - 1] === "--port") ?? "3141");
@@ -111,9 +110,10 @@ const server = Bun.serve({
     // Serve static files from ui/ directory
     const pluginRoot = import.meta.dir;
     let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
-    const fullPath = join(pluginRoot, filePath);
+    const fullPath = resolve(join(pluginRoot, filePath));
 
-    if (existsSync(fullPath)) {
+    // Prevent path traversal outside the ui/ directory
+    if (fullPath.startsWith(pluginRoot) && existsSync(fullPath)) {
       return new Response(Bun.file(fullPath));
     }
 
