@@ -171,9 +171,14 @@ async function loadMoreEvents() {
     if (deduped.length === 0) {
       state.eventsFullyLoaded = true;
     } else {
+      const scroll = document.getElementById('activityScroll');
+      const prevHeight = scroll ? scroll.scrollHeight : 0;
+      const prevTop = scroll ? scroll.scrollTop : 0;
       state.events = state.events.concat(deduped).sort((a, b) => a.timestamp - b.timestamp);
       renderChipBar();
       renderActivity();
+      const scrollAfter = document.getElementById('activityScroll');
+      if (scrollAfter) scrollAfter.scrollTop = prevTop + (scrollAfter.scrollHeight - prevHeight);
     }
   }
   state.loadingMore = false;
@@ -443,7 +448,7 @@ function renderKanban() {
 
   if (state.agentFilters.size > 0) {
     const labels = new Set([...state.agentFilters].map(id => getAgentLabel(id)));
-    allTasks = allTasks.filter(t => t.owner && labels.has(t.owner));
+    allTasks = allTasks.filter(t => labels.has(t.owner || 'Claude (session)'));
   }
 
   const pending = allTasks.filter(t => t.status === 'pending');
@@ -455,7 +460,8 @@ function renderKanban() {
       ? '<div class="kanban-empty">No tasks</div>'
       : tasks.map(t => {
           const hasBlocker = t.blocked_by && t.blocked_by !== '[]' && t.blocked_by !== 'null';
-          const ownerColor = t.owner ? agentColor(t.owner) : 'var(--text-dim)';
+          const ownerDisplay = t.owner || 'Claude';
+          const ownerColor = t.owner ? agentColor(t.owner) : agentColor('__top_level__');
           const ts = t.updated_at || t.created_at;
           return `<div class="kanban-card" data-task-id="${esc(t.id)}">
             <div class="kanban-card-header">
@@ -464,7 +470,7 @@ function renderKanban() {
             </div>
             <div class="kanban-card-subject">${esc(t.subject || '(untitled)')}</div>
             <div class="kanban-card-footer">
-              ${t.owner ? `<span class="kanban-card-owner"><span class="dot" style="background:${ownerColor}"></span>${esc(t.owner)}</span>` : '<span></span>'}
+              <span class="kanban-card-owner"><span class="dot" style="background:${ownerColor}"></span>${esc(ownerDisplay)}</span>
               <span class="kanban-card-time">${ts ? formatTime(ts) : ''}</span>
             </div>
           </div>`;
@@ -659,10 +665,10 @@ function renderActivity() {
     link.addEventListener('click', (e) => { e.stopPropagation(); showEventModal(link.dataset.detailId); });
   });
 
-  // Scroll to bottom in live mode, attach lazy-load listener
+  // Scroll to bottom in live mode (skip if loading older events), attach lazy-load listener
   const scroll = document.getElementById('activityScroll');
   if (scroll) {
-    if (state.isLive) scroll.scrollTop = scroll.scrollHeight;
+    if (state.isLive && !state.loadingMore) scroll.scrollTop = scroll.scrollHeight;
     scroll.addEventListener('scroll', onActivityScroll);
   }
 }
@@ -671,12 +677,7 @@ function onActivityScroll() {
   const scroll = document.getElementById('activityScroll');
   if (!scroll) return;
   if (scroll.scrollTop < 100 && !state.eventsFullyLoaded && !state.loadingMore) {
-    const prevHeight = scroll.scrollHeight;
-    loadMoreEvents().then(() => {
-      // Preserve scroll position after prepending older events
-      const newHeight = scroll.scrollHeight;
-      scroll.scrollTop += newHeight - prevHeight;
-    });
+    loadMoreEvents();
   }
 }
 
@@ -881,7 +882,7 @@ function startPolling() {
     try {
       await Promise.all([pollNewEvents(), loadSessionDetails(), loadStats()]);
     } finally { polling = false; }
-  }, 2000);
+  }, 3000);
 }
 
 loadAll().then(startPolling);
