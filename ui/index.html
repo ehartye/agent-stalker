@@ -619,6 +619,10 @@ body::after {
       <div class="sidebar-header">Teams</div>
       <div class="sidebar-list" id="teamList" style="max-height:120px"></div>
     </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">Tasks <span class="count" id="taskCount">0</span></div>
+      <div class="sidebar-list" id="taskList" style="max-height:120px"></div>
+    </div>
   </aside>
 
   <main class="main">
@@ -639,6 +643,14 @@ body::after {
         <option value="TeammateIdle">TeammateIdle</option>
         <option value="UserPromptSubmit">UserPromptSubmit</option>
         <option value="Stop">Stop</option>
+      </select>
+      <select class="filter-select" id="timeRangeFilter">
+        <option value="">All time</option>
+        <option value="5m">Last 5 min</option>
+        <option value="15m">Last 15 min</option>
+        <option value="1h">Last 1 hour</option>
+        <option value="6h">Last 6 hours</option>
+        <option value="1d">Last 24 hours</option>
       </select>
       <div class="toolbar-spacer"></div>
       <span class="event-count" id="eventCountLabel">0 events</span>
@@ -679,6 +691,7 @@ const state = {
   events: [],
   agents: [],
   tools: [],
+  tasks: [],
   stats: {},
   selectedSession: null,
   selectedAgent: null,
@@ -686,6 +699,7 @@ const state = {
   searchText: '',
   toolFilter: '',
   eventTypeFilter: '',
+  timeRangeFilter: '',
   isLive: true,
   lastTimestamp: 0,
   pollTimer: null,
@@ -740,6 +754,14 @@ async function loadTools() {
   if (data) {
     state.tools = data;
     renderToolFilter();
+  }
+}
+
+async function loadTasks() {
+  const data = await fetchJSON('/api/tasks');
+  if (data) {
+    state.tasks = data;
+    renderTasks();
   }
 }
 
@@ -839,6 +861,18 @@ function renderAgents() {
   });
 }
 
+function renderTasks() {
+  const el = document.getElementById('taskList');
+  document.getElementById('taskCount').textContent = state.tasks.length;
+  el.innerHTML = state.tasks.map(t =>
+    `<div class="sidebar-item" title="${t.id}">
+      <span class="dot" style="background:var(--accent-amber)"></span>
+      <span class="label">${t.subject || t.id}</span>
+      ${t.teammate_name ? `<span class="badge">${t.teammate_name}</span>` : ''}
+    </div>`
+  ).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
+}
+
 function renderToolFilter() {
   const el = document.getElementById('toolFilter');
   const current = el.value;
@@ -860,6 +894,13 @@ function renderEvents() {
   // Apply event type filter
   if (state.eventTypeFilter) {
     events = events.filter(e => e.hook_event_name === state.eventTypeFilter);
+  }
+
+  // Apply time range filter
+  if (state.timeRangeFilter) {
+    const durations = { '5m': 5*60*1000, '15m': 15*60*1000, '1h': 60*60*1000, '6h': 6*60*60*1000, '1d': 24*60*60*1000 };
+    const cutoff = Date.now() - (durations[state.timeRangeFilter] || 0);
+    events = events.filter(e => e.timestamp && e.timestamp > cutoff);
   }
 
   // Apply text search
@@ -1015,6 +1056,11 @@ document.getElementById('eventTypeFilter').addEventListener('change', e => {
   renderEvents();
 });
 
+document.getElementById('timeRangeFilter').addEventListener('change', e => {
+  state.timeRangeFilter = e.target.value;
+  renderEvents();
+});
+
 document.getElementById('liveToggle').addEventListener('click', () => {
   state.isLive = !state.isLive;
   const el = document.getElementById('liveToggle');
@@ -1036,7 +1082,7 @@ document.addEventListener('keydown', e => {
 // --- Init ---
 
 async function loadAll() {
-  await Promise.all([loadSessions(), loadAgents(), loadEvents(), loadTools(), loadStats()]);
+  await Promise.all([loadSessions(), loadAgents(), loadEvents(), loadTools(), loadTasks(), loadStats()]);
 }
 
 function startPolling() {
