@@ -11,21 +11,57 @@ function jsonResponse(data: any, status = 200): Response {
   });
 }
 
-function handleApi(url: URL): Response {
+function handleApi(url: URL, method: string): Response {
   const db = getDb();
   const path = url.pathname;
   const params = url.searchParams;
 
   if (path === "/api/sessions") {
     const team = params.get("team");
+    const archived = params.get("archived");
     const limit = parseInt(params.get("limit") ?? "50");
     const offset = parseInt(params.get("offset") ?? "0");
-    let query = "SELECT * FROM sessions";
+    let query = "SELECT * FROM sessions WHERE 1=1";
     const qParams: any[] = [];
-    if (team) { query += " WHERE team_name = ?"; qParams.push(team); }
+    if (archived === "true") {
+      query += " AND archived_at IS NOT NULL";
+    } else {
+      query += " AND archived_at IS NULL";
+    }
+    if (team) { query += " AND team_name = ?"; qParams.push(team); }
     query += " ORDER BY started_at DESC LIMIT ? OFFSET ?";
     qParams.push(limit, offset);
     return jsonResponse(db.query(query).all(...qParams));
+  }
+
+  // POST /api/sessions/:id/archive
+  if (path.match(/^\/api\/sessions\/[^/]+\/archive$/) && method === "POST") {
+    const id = path.split("/")[3];
+    const session = db.query("SELECT * FROM sessions WHERE id = ?").get(id);
+    if (!session) return jsonResponse({ error: "Not found" }, 404);
+    db.run("UPDATE sessions SET archived_at = ? WHERE id = ?", [Date.now(), id]);
+    return jsonResponse({ ok: true });
+  }
+
+  // POST /api/sessions/:id/unarchive
+  if (path.match(/^\/api\/sessions\/[^/]+\/unarchive$/) && method === "POST") {
+    const id = path.split("/")[3];
+    db.run("UPDATE sessions SET archived_at = NULL WHERE id = ?", [id]);
+    return jsonResponse({ ok: true });
+  }
+
+  // DELETE /api/sessions/:id
+  if (path.match(/^\/api\/sessions\/[^/]+$/) && method === "DELETE") {
+    const id = path.split("/")[3];
+    const session = db.query("SELECT * FROM sessions WHERE id = ?").get(id) as any;
+    if (!session) return jsonResponse({ error: "Not found" }, 404);
+    if (!session.archived_at) return jsonResponse({ error: "Must archive before deleting" }, 400);
+    db.run("DELETE FROM task_events WHERE session_id = ?", [id]);
+    db.run("DELETE FROM tasks WHERE session_id = ?", [id]);
+    db.run("DELETE FROM agents WHERE session_id = ?", [id]);
+    db.run("DELETE FROM events WHERE session_id = ?", [id]);
+    db.run("DELETE FROM sessions WHERE id = ?", [id]);
+    return jsonResponse({ ok: true });
   }
 
   if (path.startsWith("/api/sessions/")) {
@@ -125,7 +161,7 @@ const server = Bun.serve({
     const url = new URL(req.url);
 
     if (url.pathname.startsWith("/api/")) {
-      return handleApi(url);
+      return handleApi(url, req.method);
     }
 
     // Serve static files from ui/ directory
