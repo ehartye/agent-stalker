@@ -91,7 +91,7 @@ function handleTaskCompleted(event: Record<string, any>): void {
   ensureSession(event);
   const db = getDb();
   db.run(
-    "INSERT INTO tasks (id, session_id, subject, description, teammate_name, team_name, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO tasks (id, session_id, subject, description, status, owner, team_name, completed_at) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?)",
     [event.task_id, event.session_id, event.task_subject, event.task_description ?? null, event.teammate_name ?? null, event.team_name ?? null, Date.now()],
   );
   if (event.team_name) {

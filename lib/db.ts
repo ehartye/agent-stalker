@@ -91,6 +91,52 @@ function runMigrations(db: Database): void {
       db.run("UPDATE schema_version SET version = 1");
     }
   }
+
+  if (currentVersion < 2) {
+    // Migrate tasks table: rename old, create new with expanded columns, copy data, drop old
+    db.run(`CREATE TABLE tasks_v2 (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      subject TEXT,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      owner TEXT,
+      team_name TEXT,
+      blocks TEXT,
+      blocked_by TEXT,
+      created_at INTEGER,
+      updated_at INTEGER,
+      completed_at INTEGER,
+      FOREIGN KEY (session_id) REFERENCES sessions(id)
+    )`);
+
+    // Migrate existing data: teammate_name -> owner, status = 'completed' for existing rows
+    db.run(`INSERT INTO tasks_v2 (id, session_id, subject, description, status, owner, team_name, completed_at)
+      SELECT id, session_id, subject, description, 'completed', teammate_name, team_name, completed_at
+      FROM tasks`);
+
+    db.run("DROP TABLE tasks");
+    db.run("ALTER TABLE tasks_v2 RENAME TO tasks");
+
+    // Create task_events table
+    db.run(`CREATE TABLE task_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT,
+      session_id TEXT,
+      event_type TEXT,
+      field_name TEXT,
+      old_value TEXT,
+      new_value TEXT,
+      timestamp INTEGER,
+      FOREIGN KEY (task_id) REFERENCES tasks(id),
+      FOREIGN KEY (session_id) REFERENCES sessions(id)
+    )`);
+
+    db.run("CREATE INDEX idx_task_events_task_id ON task_events(task_id)");
+    db.run("CREATE INDEX idx_task_events_timestamp ON task_events(timestamp)");
+
+    db.run("UPDATE schema_version SET version = 2");
+  }
 }
 
 export function getDb(): Database {
