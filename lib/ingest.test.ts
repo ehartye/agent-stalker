@@ -119,4 +119,172 @@ describe("ingestEvent", () => {
     const session = db.query("SELECT * FROM sessions WHERE id = 'sess-late'").get() as any;
     expect(session).not.toBeNull();
   });
+
+  describe("TaskCreate via PostToolUse", () => {
+    it("creates task row with correct fields and task_event", () => {
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-tc1", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "sess-tc1",
+        tool_name: "TaskCreate",
+        tool_input: { subject: "Build auth module", description: "Implement OAuth2 flow" },
+        tool_response: "Created task #42",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      const db = getDb();
+      const task = db.query("SELECT * FROM tasks WHERE id = '42'").get() as any;
+      expect(task).not.toBeNull();
+      expect(task.subject).toBe("Build auth module");
+      expect(task.description).toBe("Implement OAuth2 flow");
+      expect(task.status).toBe("pending");
+      expect(task.created_at).not.toBeNull();
+
+      const evt = db.query("SELECT * FROM task_events WHERE task_id = '42'").get() as any;
+      expect(evt).not.toBeNull();
+      expect(evt.event_type).toBe("created");
+    });
+
+    it("stores addBlocks/addBlockedBy as JSON arrays", () => {
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-tc2", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "sess-tc2",
+        tool_name: "TaskCreate",
+        tool_input: { subject: "Task with deps", addBlocks: ["5", "6"], addBlockedBy: ["1", "2"] },
+        tool_response: "Created task #43",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      const db = getDb();
+      const task = db.query("SELECT * FROM tasks WHERE id = '43'").get() as any;
+      expect(task).not.toBeNull();
+      expect(JSON.parse(task.blocks)).toEqual(["5", "6"]);
+      expect(JSON.parse(task.blocked_by)).toEqual(["1", "2"]);
+    });
+  });
+
+  describe("TaskUpdate via PostToolUse", () => {
+    it("updates fields and records per-field task_events", () => {
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-tu1", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      // Create task first
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "sess-tu1",
+        tool_name: "TaskCreate",
+        tool_input: { subject: "Original subject" },
+        tool_response: "Created task #50",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      // Update the task
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "sess-tu1",
+        tool_name: "TaskUpdate",
+        tool_input: { taskId: "50", owner: "alice", status: "in_progress" },
+        tool_response: "Updated task #50 owner, status",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      const db = getDb();
+      const task = db.query("SELECT * FROM tasks WHERE id = '50'").get() as any;
+      expect(task.owner).toBe("alice");
+      expect(task.status).toBe("in_progress");
+
+      const events = db.query("SELECT * FROM task_events WHERE task_id = '50' ORDER BY id").all() as any[];
+      // 'created' + 'assigned' + 'status_change' = 3
+      expect(events.length).toBe(3);
+      const assigned = events.find((e: any) => e.event_type === "assigned");
+      expect(assigned).not.toBeNull();
+      expect(assigned.new_value).toBe("alice");
+      const statusChange = events.find((e: any) => e.event_type === "status_change");
+      expect(statusChange).not.toBeNull();
+      expect(statusChange.old_value).toBe("pending");
+      expect(statusChange.new_value).toBe("in_progress");
+    });
+
+    it("sets completed_at when status='completed'", () => {
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-tu2", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "sess-tu2",
+        tool_name: "TaskCreate",
+        tool_input: { subject: "Task to complete" },
+        tool_response: "Created task #51",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "sess-tu2",
+        tool_name: "TaskUpdate",
+        tool_input: { taskId: "51", status: "completed" },
+        tool_response: "Updated task #51 status",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      const db = getDb();
+      const task = db.query("SELECT * FROM tasks WHERE id = '51'").get() as any;
+      expect(task.status).toBe("completed");
+      expect(task.completed_at).not.toBeNull();
+    });
+  });
+
+  describe("TaskCompleted fallback behavior", () => {
+    it("creates task if not already tracked", () => {
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-tf1", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      ingestEvent({
+        hook_event_name: "TaskCompleted",
+        session_id: "sess-tf1",
+        task_id: "untracked-1",
+        task_subject: "Mystery task",
+        task_description: "Not previously created",
+        teammate_name: "bob",
+        team_name: "team-x",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      const db = getDb();
+      const task = db.query("SELECT * FROM tasks WHERE id = 'untracked-1'").get() as any;
+      expect(task).not.toBeNull();
+      expect(task.status).toBe("completed");
+      expect(task.owner).toBe("bob");
+      expect(task.completed_at).not.toBeNull();
+    });
+
+    it("updates existing tracked task on TaskCompleted", () => {
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-tf2", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      // Create task via PostToolUse first
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "sess-tf2",
+        tool_name: "TaskCreate",
+        tool_input: { subject: "Pre-existing task" },
+        tool_response: "Created task #60",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      // Now TaskCompleted fires for same task
+      ingestEvent({
+        hook_event_name: "TaskCompleted",
+        session_id: "sess-tf2",
+        task_id: "60",
+        task_subject: "Pre-existing task",
+        teammate_name: "carol",
+        team_name: "team-y",
+        cwd: "/tmp",
+        permission_mode: "default",
+      });
+      const db = getDb();
+      const task = db.query("SELECT * FROM tasks WHERE id = '60'").get() as any;
+      expect(task).not.toBeNull();
+      expect(task.status).toBe("completed");
+      expect(task.completed_at).not.toBeNull();
+
+      // Should have a 'completed' task_event
+      const events = db.query("SELECT * FROM task_events WHERE task_id = '60' AND event_type = 'completed'").all() as any[];
+      expect(events.length).toBe(1);
+    });
+  });
 });
