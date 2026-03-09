@@ -881,6 +881,7 @@ const state = {
   toolFilter: '',
   eventTypeFilter: '',
   timeRangeFilter: '',
+  agentFilter: null,
   isLive: true,
   lastTimestamp: 0,
 };
@@ -1078,15 +1079,86 @@ function renderSessionList(listId, sessions, countId, isArchived) {
   });
 }
 
-// Placeholder for Task 5 — will be replaced with full accordion rendering
 function renderAccordions() {
   const el = document.getElementById('sessionAccordions');
   const ids = [...state.selectedSessionIds];
+  const allSessions = [...state.activeSessions, ...state.archivedSessions];
+
   if (ids.length === 0) {
     el.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:11px;text-align:center">Select sessions above to view agents and tasks</div>';
     return;
   }
-  el.innerHTML = ids.map(sid => `<div style="padding:8px 12px;font-size:11px;color:var(--text-secondary)">${esc(sid.slice(0, 12))}...</div>`).join('');
+
+  el.innerHTML = ids.map(sid => {
+    const session = allSessions.find(s => s.id === sid);
+    if (!session) return '';
+    const agents = state.sessionAgents[sid] || [];
+    const tasks = state.sessionTasks[sid] || [];
+    const isActive = !session.ended_at;
+    const dotColor = isActive ? 'var(--accent-green)' : 'var(--text-dim)';
+
+    return `<div class="accordion-item">
+      <div class="accordion-header" data-accordion="${esc(sid)}">
+        <span class="chevron">&#9662;</span>
+        <span class="dot" style="background:${dotColor};width:6px;height:6px;border-radius:50%;flex-shrink:0"></span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sessionLabel(session))}</span>
+        <span class="badge" style="font-size:10px;padding:1px 5px;border-radius:10px;background:var(--bg-card);color:var(--text-dim)">${agents.length}A ${tasks.length}T</span>
+      </div>
+      <div class="accordion-body">
+        <div class="accordion-sub-header">Agents (${agents.length})</div>
+        ${agents.length === 0 ? '<div style="padding:4px 8px;color:var(--text-dim);font-size:10px">(none)</div>' :
+          agents.map(a => {
+            const isRunning = !a.ended_at;
+            return `<div class="sidebar-item" data-agent-filter="${esc(a.id)}" data-session-scope="${esc(sid)}">
+              <span class="dot" style="background:${isRunning ? 'var(--accent-purple)' : 'var(--text-dim)'}"></span>
+              <span class="label" title="${esc(a.id)}">${esc(a.agent_type || a.id.slice(0, 12))}</span>
+              ${a.team_name ? `<span class="badge">${esc(a.team_name)}</span>` : ''}
+            </div>`;
+          }).join('')}
+        <div class="accordion-sub-header" style="margin-top:4px">Tasks (${tasks.length})</div>
+        ${tasks.length === 0 ? '<div style="padding:4px 8px;color:var(--text-dim);font-size:10px">(none)</div>' :
+          tasks.map(t =>
+            `<div class="sidebar-item" data-task-detail="${esc(t.id)}">
+              <span class="dot" style="background:${taskStatusColor(t.status)}"></span>
+              <span class="label">${esc(t.subject || t.id)}</span>
+              ${t.owner ? `<span class="badge">${esc(t.owner)}</span>` : ''}
+            </div>`
+          ).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Accordion toggle
+  el.querySelectorAll('.accordion-header').forEach(header => {
+    header.addEventListener('click', () => {
+      header.classList.toggle('collapsed');
+    });
+  });
+
+  // Agent click -> filter events to that agent
+  el.querySelectorAll('[data-agent-filter]').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const agentId = item.dataset.agentFilter;
+      const wasActive = item.classList.contains('active');
+      el.querySelectorAll('[data-agent-filter]').forEach(i => i.classList.remove('active'));
+      if (wasActive) {
+        state.agentFilter = null;
+      } else {
+        item.classList.add('active');
+        state.agentFilter = agentId;
+      }
+      renderEvents();
+    });
+  });
+
+  // Task click -> show detail
+  el.querySelectorAll('[data-task-detail]').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showTaskDetail(item.dataset.taskDetail);
+    });
+  });
 }
 
 function renderToolFilter() {
@@ -1110,6 +1182,11 @@ function renderEvents() {
   // Apply event type filter
   if (state.eventTypeFilter) {
     events = events.filter(e => e.hook_event_name === state.eventTypeFilter);
+  }
+
+  // Apply agent filter
+  if (state.agentFilter) {
+    events = events.filter(e => e.agent_id === state.agentFilter);
   }
 
   // Apply time range filter
