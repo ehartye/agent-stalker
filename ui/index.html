@@ -13,21 +13,9 @@
       <span class="icon"></span>
       agent-stalker
     </div>
-    <div class="header-search">
-      <input type="text" id="searchInput" placeholder="Search events..." autocomplete="off">
-    </div>
-    <div class="header-controls">
-      <div class="live-indicator" id="liveToggle" title="Toggle auto-refresh">
-        <span class="live-dot"></span>
-        <span id="liveLabel">LIVE</span>
-      </div>
-    </div>
-  </header>
-
-  <aside class="sidebar">
-    <div class="session-dropdown">
-      <button class="session-dropdown-trigger" id="sessionDropdownTrigger">
-        <span id="sessionDropdownLabel">No sessions selected</span>
+    <div class="session-picker">
+      <button class="session-picker-btn" id="sessionDropdownTrigger">
+        <span id="sessionDropdownLabel">No sessions</span>
         <span class="chevron">&#9662;</span>
       </button>
       <div class="session-dropdown-panel" id="sessionDropdownPanel">
@@ -49,57 +37,25 @@
         </div>
       </div>
     </div>
-    <div class="session-accordions" id="sessionAccordions"></div>
-  </aside>
-
-  <main class="main">
-    <div class="toolbar">
-      <select class="filter-select" id="toolFilter">
-        <option value="">All tools</option>
-      </select>
-      <select class="filter-select" id="eventTypeFilter">
-        <option value="">All event types</option>
-        <option value="SessionStart">SessionStart</option>
-        <option value="SessionEnd">SessionEnd</option>
-        <option value="PreToolUse">PreToolUse</option>
-        <option value="PostToolUse">PostToolUse</option>
-        <option value="PostToolUseFailure">PostToolUseFailure</option>
-        <option value="SubagentStart">SubagentStart</option>
-        <option value="SubagentStop">SubagentStop</option>
-        <option value="TaskCompleted">TaskCompleted</option>
-        <option value="TeammateIdle">TeammateIdle</option>
-        <option value="UserPromptSubmit">UserPromptSubmit</option>
-        <option value="Stop">Stop</option>
-      </select>
-      <select class="filter-select" id="timeRangeFilter">
-        <option value="">All time</option>
-        <option value="5m">Last 5 min</option>
-        <option value="15m">Last 15 min</option>
-        <option value="1h">Last 1 hour</option>
-        <option value="6h">Last 6 hours</option>
-        <option value="1d">Last 24 hours</option>
-      </select>
-      <div class="toolbar-spacer"></div>
-      <span class="event-count" id="eventCountLabel">0 events</span>
+    <div class="header-search">
+      <input type="text" id="searchInput" placeholder="Search events..." autocomplete="off">
     </div>
-    <div class="filter-chips-bar" id="filterChipsBar"></div>
-
-    <div class="timeline-container" id="timeline">
-      <div class="timeline-empty">
-        <div class="icon"></div>
-        <div>No events captured yet</div>
-        <div style="font-size:11px;color:var(--text-dim)">Events will appear here as Claude Code runs</div>
+    <div class="header-controls">
+      <div class="live-indicator" id="liveToggle" title="Toggle auto-refresh">
+        <span class="live-dot"></span>
+        <span id="liveLabel">LIVE</span>
       </div>
     </div>
+  </header>
 
-    <div class="detail-pane" id="detailPane">
-      <div class="detail-header">
-        <h3 id="detailTitle">Event Detail</h3>
-        <button class="detail-close" id="detailClose">&times;</button>
-      </div>
-      <div id="detailContent"></div>
-    </div>
-  </main>
+  <div class="chip-bar" id="chipBar">
+    <span class="chip-bar-empty">Select a session to begin</span>
+  </div>
+
+  <div class="content">
+    <div class="content-panel" id="kanbanPanel"></div>
+    <div class="content-panel" id="activityPanel"></div>
+  </div>
 
   <footer class="footer">
     <div class="footer-stat">Sessions: <span class="val" id="statSessions">0</span></div>
@@ -110,6 +66,20 @@
     <div class="footer-spacer"></div>
     <div class="footer-time" id="footerTime"></div>
   </footer>
+
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-panel" id="modalPanel">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">Detail</h3>
+        <div class="modal-nav">
+          <button class="modal-nav-btn" id="modalPrev" title="Previous">&#8592;</button>
+          <button class="modal-nav-btn" id="modalNext" title="Next">&#8594;</button>
+        </div>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
 </div>
 
 <script src="/app.js"></script>
