@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agent-stalker</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep: #0a0c10;
+  --bg-panel: #0f1218;
+  --bg-card: #141820;
+  --bg-hover: #1a1f2a;
+  --bg-active: #1e2433;
+  --border: #1e2433;
+  --border-bright: #2a3345;
+  --text-primary: #c8cdd5;
+  --text-secondary: #6b7280;
+  --text-dim: #454d5c;
+  --accent-green: #22d97f;
+  --accent-green-dim: rgba(34, 217, 127, 0.12);
+  --accent-amber: #f0a030;
+  --accent-amber-dim: rgba(240, 160, 48, 0.12);
+  --accent-blue: #3b82f6;
+  --accent-blue-dim: rgba(59, 130, 246, 0.12);
+  --accent-red: #ef4444;
+  --accent-red-dim: rgba(239, 68, 68, 0.12);
+  --accent-purple: #a78bfa;
+  --accent-purple-dim: rgba(167, 139, 250, 0.12);
+  --accent-cyan: #22d3ee;
+  --accent-cyan-dim: rgba(34, 211, 238, 0.12);
+  --accent-pink: #f472b6;
+  --accent-pink-dim: rgba(244, 114, 182, 0.12);
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Outfit', sans-serif;
+  --radius: 6px;
+  --glow-green: 0 0 20px rgba(34, 217, 127, 0.15);
+  --glow-amber: 0 0 20px rgba(240, 160, 48, 0.15);
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* Layout */
+#app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: 48px 1fr 32px;
+  grid-template-areas:
+    "header header"
+    "sidebar main"
+    "footer footer";
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  color: var(--accent-green);
+  text-shadow: var(--glow-green);
+  white-space: nowrap;
+}
+
+.header-brand .icon {
+  width: 20px;
+  height: 20px;
+  background: var(--accent-green);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+.header-search {
+  flex: 1;
+  max-width: 400px;
+  position: relative;
+}
+
+.header-search input {
+  width: 100%;
+  padding: 6px 12px 6px 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.header-search input:focus {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 0 1px rgba(34, 217, 127, 0.2);
+}
+
+.header-search::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  background: var(--text-dim);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--accent-green-dim);
+  border: 1px solid rgba(34, 217, 127, 0.25);
+  border-radius: var(--radius);
+  font-size: 11px;
+  color: var(--accent-green);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.live-indicator.paused {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  animation: pulse 2s infinite;
+}
+
+.live-indicator.paused .live-dot {
+  background: var(--text-dim);
+  animation: none;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Sidebar */
+.sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sidebar-section.grow { flex: 1; overflow: hidden; }
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.sidebar-header .count {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.sidebar-list {
+  overflow-y: auto;
+  padding: 0 6px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.sidebar-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sidebar-item.active { background: var(--bg-active); color: var(--text-primary); }
+
+.sidebar-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sidebar-item .label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-item .badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-dim);
+}
+
+/* Main content */
+.main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-deep);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.filter-chip:hover { border-color: var(--border-bright); color: var(--text-primary); }
+.filter-chip.active { border-color: var(--accent-green); color: var(--accent-green); background: var(--accent-green-dim); }
+
+.filter-chip .remove {
+  width: 12px;
+  height: 12px;
+  display: none;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.filter-chip.active .remove { display: inline-block; }
+
+select.filter-select {
+  padding: 3px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  outline: none;
+}
+select.filter-select:focus { border-color: var(--accent-green); }
+
+.toolbar-spacer { flex: 1; }
+
+.event-count {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Timeline */
+.timeline-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.timeline-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.timeline-empty .icon {
+  width: 48px;
+  height: 48px;
+  opacity: 0.3;
+  background: var(--text-dim);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5'%3E%3Cpath d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+.event-row {
+  display: grid;
+  grid-template-columns: 80px 110px 100px 120px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 11px;
+  border-left: 2px solid transparent;
+  animation: fadeSlideIn 0.25s ease-out;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.event-row:hover { background: var(--bg-hover); }
+.event-row.selected { background: var(--bg-active); border-left-color: var(--accent-green); }
+
+.event-row .time { color: var(--text-dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+
+.event-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.event-type[data-type="SessionStart"] { background: var(--accent-green-dim); color: var(--accent-green); }
+.event-type[data-type="SessionEnd"] { background: var(--accent-red-dim); color: var(--accent-red); }
+.event-type[data-type="PreToolUse"] { background: var(--accent-blue-dim); color: var(--accent-blue); }
+.event-type[data-type="PostToolUse"] { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.event-type[data-type="PostToolUseFailure"] { background: var(--accent-red-dim); color: var(--accent-red); }
+.event-type[data-type="SubagentStart"] { background: var(--accent-purple-dim); color: var(--accent-purple); }
+.event-type[data-type="SubagentStop"] { background: var(--accent-pink-dim); color: var(--accent-pink); }
+.event-type[data-type="TaskCompleted"] { background: var(--accent-amber-dim); color: var(--accent-amber); }
+.event-type[data-type="TeammateIdle"] { background: var(--accent-amber-dim); color: var(--accent-amber); }
+.event-type[data-type="Stop"] { background: var(--accent-red-dim); color: var(--accent-red); }
+.event-type[data-type="UserPromptSubmit"] { background: var(--accent-blue-dim); color: var(--accent-blue); }
+
+.event-row .tool {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-row .agent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-row .summary {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Detail Pane */
+.detail-pane {
+  display: none;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.detail-pane.open {
+  display: block;
+  min-height: 200px;
+  max-height: 45vh;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel);
+  z-index: 1;
+}
+
+.detail-header h3 {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.detail-close {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius);
+  font-size: 16px;
+  transition: all 0.15s;
+}
+.detail-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1px;
+  padding: 12px 16px;
+  background: var(--border);
+}
+
+.detail-field {
+  background: var(--bg-panel);
+  padding: 8px 10px;
+}
+
+.detail-field .label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+.detail-field .value {
+  color: var(--text-primary);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.detail-json {
+  padding: 12px 16px;
+}
+
+.detail-json summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  user-select: none;
+}
+.detail-json summary:hover { color: var(--text-primary); }
+
+.json-viewer {
+  margin-top: 6px;
+  padding: 12px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.json-key { color: var(--accent-blue); }
+.json-string { color: var(--accent-green); }
+.json-number { color: var(--accent-amber); }
+.json-bool { color: var(--accent-purple); }
+.json-null { color: var(--text-dim); }
+
+/* Footer */
+.footer {
+  grid-area: footer;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.footer-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-stat .val {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.footer-spacer { flex: 1; }
+
+.footer-time { font-variant-numeric: tabular-nums; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+
+/* Noise overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.015;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px;
+  z-index: 1000;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <div class="header-brand">
+      <span class="icon"></span>
+      agent-stalker
+    </div>
+    <div class="header-search">
+      <input type="text" id="searchInput" placeholder="Search events..." autocomplete="off">
+    </div>
+    <div class="header-controls">
+      <div class="live-indicator" id="liveToggle" title="Toggle auto-refresh">
+        <span class="live-dot"></span>
+        <span id="liveLabel">LIVE</span>
+      </div>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="sidebar-section grow">
+      <div class="sidebar-header">Sessions <span class="count" id="sessionCount">0</span></div>
+      <div class="sidebar-list" id="sessionList"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">Agents <span class="count" id="agentCount">0</span></div>
+      <div class="sidebar-list" id="agentList" style="max-height:150px"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-header">Teams</div>
+      <div class="sidebar-list" id="teamList" style="max-height:120px"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="toolbar">
+      <select class="filter-select" id="toolFilter">
+        <option value="">All tools</option>
+      </select>
+      <select class="filter-select" id="eventTypeFilter">
+        <option value="">All event types</option>
+        <option value="SessionStart">SessionStart</option>
+        <option value="SessionEnd">SessionEnd</option>
+        <option value="PreToolUse">PreToolUse</option>
+        <option value="PostToolUse">PostToolUse</option>
+        <option value="PostToolUseFailure">PostToolUseFailure</option>
+        <option value="SubagentStart">SubagentStart</option>
+        <option value="SubagentStop">SubagentStop</option>
+        <option value="TaskCompleted">TaskCompleted</option>
+        <option value="TeammateIdle">TeammateIdle</option>
+        <option value="UserPromptSubmit">UserPromptSubmit</option>
+        <option value="Stop">Stop</option>
+      </select>
+      <div class="toolbar-spacer"></div>
+      <span class="event-count" id="eventCountLabel">0 events</span>
+    </div>
+
+    <div class="timeline-container" id="timeline">
+      <div class="timeline-empty">
+        <div class="icon"></div>
+        <div>No events captured yet</div>
+        <div style="font-size:11px;color:var(--text-dim)">Events will appear here as Claude Code runs</div>
+      </div>
+    </div>
+
+    <div class="detail-pane" id="detailPane">
+      <div class="detail-header">
+        <h3 id="detailTitle">Event Detail</h3>
+        <button class="detail-close" id="detailClose">&times;</button>
+      </div>
+      <div id="detailContent"></div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-stat">Sessions: <span class="val" id="statSessions">0</span></div>
+    <div class="footer-stat">Events: <span class="val" id="statEvents">0</span></div>
+    <div class="footer-stat">Tools: <span class="val" id="statTools">0</span></div>
+    <div class="footer-stat">Agents: <span class="val" id="statAgents">0</span></div>
+    <div class="footer-stat">Tasks: <span class="val" id="statTasks">0</span></div>
+    <div class="footer-spacer"></div>
+    <div class="footer-time" id="footerTime"></div>
+  </footer>
+</div>
+
+<script>
+const API = '';
+const state = {
+  sessions: [],
+  events: [],
+  agents: [],
+  tools: [],
+  stats: {},
+  selectedSession: null,
+  selectedAgent: null,
+  selectedEvent: null,
+  searchText: '',
+  toolFilter: '',
+  eventTypeFilter: '',
+  isLive: true,
+  lastTimestamp: 0,
+  pollTimer: null,
+};
+
+// --- API ---
+
+async function fetchJSON(url) {
+  try {
+    const res = await fetch(API + url);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function loadSessions() {
+  const data = await fetchJSON('/api/sessions?limit=100');
+  if (data) {
+    state.sessions = data;
+    renderSessions();
+  }
+}
+
+async function loadAgents() {
+  const url = state.selectedSession
+    ? `/api/agents?session=${state.selectedSession}`
+    : '/api/agents';
+  const data = await fetchJSON(url);
+  if (data) {
+    state.agents = data;
+    renderAgents();
+  }
+}
+
+async function loadEvents() {
+  let url = '/api/events?limit=500';
+  if (state.selectedSession) url += `&session=${state.selectedSession}`;
+  if (state.toolFilter) url += `&tool=${encodeURIComponent(state.toolFilter)}`;
+  if (state.selectedAgent) url += `&agent_id=${encodeURIComponent(state.selectedAgent)}`;
+  const data = await fetchJSON(url);
+  if (data) {
+    state.events = data;
+    if (data.length > 0) {
+      state.lastTimestamp = Math.max(...data.map(e => e.timestamp || 0));
+    }
+    renderEvents();
+  }
+}
+
+async function loadTools() {
+  const data = await fetchJSON('/api/tools');
+  if (data) {
+    state.tools = data;
+    renderToolFilter();
+  }
+}
+
+async function loadStats() {
+  const data = await fetchJSON('/api/stats');
+  if (data) {
+    state.stats = data;
+    renderStats();
+  }
+}
+
+async function loadEventDetail(id) {
+  const data = await fetchJSON(`/api/events/${id}`);
+  if (data) {
+    state.selectedEvent = data;
+    renderDetail(data);
+  }
+}
+
+async function pollNewEvents() {
+  if (!state.isLive || !state.lastTimestamp) return;
+  let url = `/api/events?since=${state.lastTimestamp}&limit=200`;
+  if (state.selectedSession) url += `&session=${state.selectedSession}`;
+  if (state.toolFilter) url += `&tool=${encodeURIComponent(state.toolFilter)}`;
+  if (state.selectedAgent) url += `&agent_id=${encodeURIComponent(state.selectedAgent)}`;
+  const data = await fetchJSON(url);
+  if (data && data.length > 0) {
+    state.events = state.events.concat(data);
+    state.lastTimestamp = Math.max(...data.map(e => e.timestamp || 0));
+    renderEvents();
+    loadStats();
+  }
+}
+
+// --- Rendering ---
+
+function renderSessions() {
+  const el = document.getElementById('sessionList');
+  document.getElementById('sessionCount').textContent = state.sessions.length;
+  const teams = new Set();
+
+  el.innerHTML = state.sessions.map(s => {
+    if (s.team_name) teams.add(s.team_name);
+    const isActive = !s.ended_at;
+    const dotColor = isActive ? 'var(--accent-green)' : 'var(--text-dim)';
+    const isSelected = state.selectedSession === s.id;
+    const label = s.cwd ? s.cwd.split('/').pop() || s.id : s.id;
+    return `<div class="sidebar-item ${isSelected ? 'active' : ''}" data-session="${s.id}">
+      <span class="dot" style="background:${dotColor}"></span>
+      <span class="label" title="${s.id}">${label}</span>
+      ${s.model ? `<span class="badge">${s.model.split('-').pop()}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const sid = item.dataset.session;
+      state.selectedSession = state.selectedSession === sid ? null : sid;
+      state.lastTimestamp = 0;
+      loadAll();
+    });
+  });
+
+  renderTeams(teams);
+}
+
+function renderTeams(teams) {
+  const el = document.getElementById('teamList');
+  const teamArr = [...teams];
+  el.innerHTML = teamArr.map(t =>
+    `<div class="sidebar-item" data-team="${t}">
+      <span class="dot" style="background:var(--accent-amber)"></span>
+      <span class="label">${t}</span>
+    </div>`
+  ).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
+}
+
+function renderAgents() {
+  const el = document.getElementById('agentList');
+  document.getElementById('agentCount').textContent = state.agents.length;
+  el.innerHTML = state.agents.map(a => {
+    const isSelected = state.selectedAgent === a.id;
+    const isActive = !a.ended_at;
+    return `<div class="sidebar-item ${isSelected ? 'active' : ''}" data-agent="${a.id}">
+      <span class="dot" style="background:${isActive ? 'var(--accent-purple)' : 'var(--text-dim)'}"></span>
+      <span class="label" title="${a.id}">${a.agent_type || a.id.slice(0, 12)}</span>
+    </div>`;
+  }).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
+
+  el.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const aid = item.dataset.agent;
+      state.selectedAgent = state.selectedAgent === aid ? null : aid;
+      state.lastTimestamp = 0;
+      loadEvents();
+    });
+  });
+}
+
+function renderToolFilter() {
+  const el = document.getElementById('toolFilter');
+  const current = el.value;
+  el.innerHTML = '<option value="">All tools</option>' +
+    state.tools.map(t => `<option value="${t.tool_name}">${t.tool_name} (${t.count})</option>`).join('');
+  el.value = current;
+}
+
+function formatTime(ts) {
+  if (!ts) return '---';
+  const d = new Date(ts);
+  return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function renderEvents() {
+  const container = document.getElementById('timeline');
+  let events = state.events;
+
+  // Apply event type filter
+  if (state.eventTypeFilter) {
+    events = events.filter(e => e.hook_event_name === state.eventTypeFilter);
+  }
+
+  // Apply text search
+  if (state.searchText) {
+    const q = state.searchText.toLowerCase();
+    events = events.filter(e =>
+      (e.hook_event_name || '').toLowerCase().includes(q) ||
+      (e.tool_name || '').toLowerCase().includes(q) ||
+      (e.agent_id || '').toLowerCase().includes(q) ||
+      (e.data || '').toLowerCase().includes(q)
+    );
+  }
+
+  document.getElementById('eventCountLabel').textContent = `${events.length} event${events.length !== 1 ? 's' : ''}`;
+
+  if (events.length === 0) {
+    container.innerHTML = `<div class="timeline-empty">
+      <div class="icon"></div>
+      <div>No events captured yet</div>
+      <div style="font-size:11px;color:var(--text-dim)">Events will appear here as Claude Code runs</div>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = events.map(e => {
+    const tool = e.tool_name || '';
+    const agent = e.agent_id ? (e.agent_type || e.agent_id.slice(0, 12)) : '';
+    let summary = '';
+    if (e.data) {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.tool_input?.command) summary = d.tool_input.command;
+        else if (d.tool_input?.file_path) summary = d.tool_input.file_path;
+        else if (d.tool_input?.pattern) summary = d.tool_input.pattern;
+        else if (d.reason) summary = d.reason;
+        else if (d.source) summary = d.source;
+      } catch {}
+    }
+    return `<div class="event-row" data-id="${e.id}">
+      <span class="time">${formatTime(e.timestamp)}</span>
+      <span class="event-type" data-type="${e.hook_event_name}">${e.hook_event_name}</span>
+      <span class="tool">${tool}</span>
+      <span class="agent-badge">${agent || '&mdash;'}</span>
+      <span class="summary" title="${summary}">${summary}</span>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.event-row').forEach(row => {
+    row.addEventListener('click', () => {
+      container.querySelectorAll('.event-row.selected').forEach(r => r.classList.remove('selected'));
+      row.classList.add('selected');
+      loadEventDetail(row.dataset.id);
+    });
+  });
+
+  // Auto-scroll to bottom if live
+  if (state.isLive) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function renderStats() {
+  const s = state.stats;
+  document.getElementById('statSessions').textContent = s.sessions ?? 0;
+  document.getElementById('statEvents').textContent = s.events ?? 0;
+  document.getElementById('statTools').textContent = s.tools ?? 0;
+  document.getElementById('statAgents').textContent = s.agents ?? 0;
+  document.getElementById('statTasks').textContent = s.tasks ?? 0;
+}
+
+function syntaxHighlight(json) {
+  if (typeof json !== 'string') json = JSON.stringify(json, null, 2);
+  return json
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"([^"\\]*(\\.[^"\\]*)*)"\s*:/g, '<span class="json-key">"$1"</span>:')
+    .replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, '<span class="json-string">"$1"</span>')
+    .replace(/\b(-?\d+\.?\d*([eE][+-]?\d+)?)\b/g, '<span class="json-number">$1</span>')
+    .replace(/\b(true|false)\b/g, '<span class="json-bool">$1</span>')
+    .replace(/\bnull\b/g, '<span class="json-null">null</span>');
+}
+
+function renderDetail(event) {
+  const pane = document.getElementById('detailPane');
+  const content = document.getElementById('detailContent');
+  const title = document.getElementById('detailTitle');
+
+  pane.classList.add('open');
+  title.textContent = `Event #${event.id} — ${event.hook_event_name}`;
+
+  let data = null;
+  try { data = event.data ? JSON.parse(event.data) : null; } catch {}
+
+  let html = `<div class="detail-grid">
+    <div class="detail-field"><div class="label">ID</div><div class="value">${event.id}</div></div>
+    <div class="detail-field"><div class="label">Type</div><div class="value">${event.hook_event_name}</div></div>
+    <div class="detail-field"><div class="label">Session</div><div class="value">${event.session_id}</div></div>
+    <div class="detail-field"><div class="label">Tool</div><div class="value">${event.tool_name || '(none)'}</div></div>
+    <div class="detail-field"><div class="label">Tool Use ID</div><div class="value">${event.tool_use_id || '(none)'}</div></div>
+    <div class="detail-field"><div class="label">Agent</div><div class="value">${event.agent_id || '(main thread)'}</div></div>
+    <div class="detail-field"><div class="label">Agent Type</div><div class="value">${event.agent_type || '(none)'}</div></div>
+    <div class="detail-field"><div class="label">Team</div><div class="value">${event.team_name || '(none)'}</div></div>
+    <div class="detail-field"><div class="label">Teammate</div><div class="value">${event.teammate_name || '(none)'}</div></div>
+    <div class="detail-field"><div class="label">Timestamp</div><div class="value">${event.timestamp ? new Date(event.timestamp).toISOString() : '(none)'}</div></div>
+  </div>`;
+
+  if (data) {
+    if (data.tool_input) {
+      html += `<div class="detail-json"><details open><summary>tool_input</summary>
+        <div class="json-viewer">${syntaxHighlight(JSON.stringify(data.tool_input, null, 2))}</div>
+      </details></div>`;
+    }
+    if (data.tool_response) {
+      html += `<div class="detail-json"><details open><summary>tool_response</summary>
+        <div class="json-viewer">${syntaxHighlight(JSON.stringify(data.tool_response, null, 2))}</div>
+      </details></div>`;
+    }
+    // Show remaining data keys
+    const shown = new Set(['tool_input', 'tool_response']);
+    const remaining = Object.fromEntries(Object.entries(data).filter(([k]) => !shown.has(k)));
+    if (Object.keys(remaining).length > 0) {
+      html += `<div class="detail-json"><details><summary>other data</summary>
+        <div class="json-viewer">${syntaxHighlight(JSON.stringify(remaining, null, 2))}</div>
+      </details></div>`;
+    }
+  }
+
+  content.innerHTML = html;
+}
+
+function closeDetail() {
+  document.getElementById('detailPane').classList.remove('open');
+  document.querySelectorAll('.event-row.selected').forEach(r => r.classList.remove('selected'));
+  state.selectedEvent = null;
+}
+
+// --- Events ---
+
+document.getElementById('detailClose').addEventListener('click', closeDetail);
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  state.searchText = e.target.value;
+  renderEvents();
+});
+
+document.getElementById('toolFilter').addEventListener('change', e => {
+  state.toolFilter = e.target.value;
+  state.lastTimestamp = 0;
+  loadEvents();
+});
+
+document.getElementById('eventTypeFilter').addEventListener('change', e => {
+  state.eventTypeFilter = e.target.value;
+  renderEvents();
+});
+
+document.getElementById('liveToggle').addEventListener('click', () => {
+  state.isLive = !state.isLive;
+  const el = document.getElementById('liveToggle');
+  const label = document.getElementById('liveLabel');
+  el.classList.toggle('paused', !state.isLive);
+  label.textContent = state.isLive ? 'LIVE' : 'PAUSED';
+});
+
+// --- Keyboard ---
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeDetail();
+  if (e.key === '/' && document.activeElement !== document.getElementById('searchInput')) {
+    e.preventDefault();
+    document.getElementById('searchInput').focus();
+  }
+});
+
+// --- Init ---
+
+async function loadAll() {
+  await Promise.all([loadSessions(), loadAgents(), loadEvents(), loadTools(), loadStats()]);
+}
+
+function startPolling() {
+  setInterval(() => {
+    if (state.isLive) {
+      pollNewEvents();
+      loadStats();
+    }
+    document.getElementById('footerTime').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+  }, 2000);
+}
+
+loadAll().then(startPolling);
+document.getElementById('footerTime').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+</script>
+</body>
+</html>
