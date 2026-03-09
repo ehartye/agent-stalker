@@ -692,6 +692,15 @@ function esc(s) {
   return d.innerHTML;
 }
 
+function taskStatusColor(status) {
+  switch (status) {
+    case 'completed': return 'var(--accent-green)';
+    case 'in_progress': return 'var(--accent-blue)';
+    case 'blocked': return 'var(--accent-red)';
+    default: return 'var(--text-dim)';
+  }
+}
+
 const API = '';
 const state = {
   sessions: [],
@@ -888,12 +897,19 @@ function renderTasks() {
   const el = document.getElementById('taskList');
   document.getElementById('taskCount').textContent = state.tasks.length;
   el.innerHTML = state.tasks.map(t =>
-    `<div class="sidebar-item" title="${esc(t.id)}">
-      <span class="dot" style="background:var(--accent-amber)"></span>
+    `<div class="sidebar-item" data-task-id="${esc(t.id)}" title="${esc(t.id)}">
+      <span class="dot" style="background:${taskStatusColor(t.status)}"></span>
       <span class="label">${esc(t.subject || t.id)}</span>
-      ${t.teammate_name ? `<span class="badge">${esc(t.teammate_name)}</span>` : ''}
+      ${t.status ? `<span class="badge">${esc(t.status)}</span>` : ''}
+      ${t.owner ? `<span class="badge">${esc(t.owner)}</span>` : ''}
     </div>`
   ).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
+
+  el.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', () => {
+      showTaskDetail(item.dataset.taskId);
+    });
+  });
 }
 
 function renderToolFilter() {
@@ -1053,6 +1069,42 @@ function renderDetail(event) {
   content.innerHTML = html;
 }
 
+async function showTaskDetail(taskId) {
+  const task = await fetchJSON(`/api/tasks/${encodeURIComponent(taskId)}`);
+  if (!task) return;
+  const events = await fetchJSON(`/api/tasks/${encodeURIComponent(taskId)}/events`) || [];
+
+  const pane = document.getElementById('detailPane');
+  const content = document.getElementById('detailContent');
+  const title = document.getElementById('detailTitle');
+
+  pane.classList.add('open');
+  title.textContent = `Task: ${task.subject || task.id}`;
+
+  let html = `<div class="detail-grid">
+    <div class="detail-field"><div class="label">ID</div><div class="value">${esc(task.id)}</div></div>
+    <div class="detail-field"><div class="label">Status</div><div class="value">${esc(task.status)}</div></div>
+    <div class="detail-field"><div class="label">Owner</div><div class="value">${esc(task.owner || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Team</div><div class="value">${esc(task.team_name || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Description</div><div class="value">${esc(task.description || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Blocks</div><div class="value">${esc(task.blocks || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Blocked By</div><div class="value">${esc(task.blocked_by || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Created</div><div class="value">${task.created_at ? new Date(task.created_at).toISOString() : '(none)'}</div></div>
+    <div class="detail-field"><div class="label">Updated</div><div class="value">${task.updated_at ? new Date(task.updated_at).toISOString() : '(none)'}</div></div>
+    <div class="detail-field"><div class="label">Completed</div><div class="value">${task.completed_at ? new Date(task.completed_at).toISOString() : '(none)'}</div></div>
+  </div>`;
+
+  if (events.length > 0) {
+    html += `<div class="detail-json"><details open><summary>History (${events.length} events)</summary>
+      <div class="json-viewer">${events.map(ev =>
+        `${esc(new Date(ev.timestamp).toISOString())}  ${esc(ev.event_type)}${ev.field_name ? '  ' + esc(ev.field_name) + ': ' + esc(ev.old_value) + ' -> ' + esc(ev.new_value) : ''}`
+      ).join('\n')}</div>
+    </details></div>`;
+  }
+
+  content.innerHTML = html;
+}
+
 function closeDetail() {
   document.getElementById('detailPane').classList.remove('open');
   document.querySelectorAll('.event-row.selected').forEach(r => r.classList.remove('selected'));
@@ -1112,6 +1164,7 @@ function startPolling() {
   setInterval(() => {
     if (state.isLive) {
       pollNewEvents();
+      loadTasks();
       loadStats();
     }
     document.getElementById('footerTime').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
