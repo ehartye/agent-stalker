@@ -141,12 +141,15 @@ function handleTaskUpdate(event: Record<string, any>): void {
 function handleToolUse(event: Record<string, any>): void {
   ensureSession(event);
 
-  // Intercept PostToolUse for TaskCreate/TaskUpdate before truncation
+  // Intercept PostToolUse for TaskCreate/TaskUpdate/Agent before truncation
   if (event.hook_event_name === "PostToolUse") {
     if (event.tool_name === "TaskCreate") {
       handleTaskCreate(event);
     } else if (event.tool_name === "TaskUpdate") {
       handleTaskUpdate(event);
+    } else if (event.tool_name === "Agent" && event.tool_response?.color && event.tool_response?.agent_id) {
+      const db = getDb();
+      db.run("UPDATE agents SET color = ? WHERE id = ?", [event.tool_response.color, event.tool_response.agent_id]);
     }
   }
 

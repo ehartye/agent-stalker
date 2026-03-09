@@ -121,10 +121,10 @@ describe("db", () => {
       expect(colNames).toContain("archived_at");
     });
 
-    it("schema_version is 3", () => {
+    it("schema_version is at least 3", () => {
       const db = getDb();
       const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
-      expect(row.version).toBe(3);
+      expect(row.version).toBeGreaterThanOrEqual(3);
     });
 
     it("archived_at index exists", () => {
@@ -132,6 +132,21 @@ describe("db", () => {
       const indexes = db.query("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='sessions'").all() as { name: string }[];
       const names = indexes.map((i) => i.name);
       expect(names).toContain("idx_sessions_archived_at");
+    });
+  });
+
+  describe("v4 migration", () => {
+    it("agents table has color column", () => {
+      const db = getDb();
+      const cols = db.query("PRAGMA table_info(agents)").all() as { name: string }[];
+      const colNames = cols.map((c) => c.name);
+      expect(colNames).toContain("color");
+    });
+
+    it("schema_version is 4", () => {
+      const db = getDb();
+      const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
+      expect(row.version).toBe(4);
     });
   });
 

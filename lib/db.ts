@@ -143,6 +143,11 @@ function runMigrations(db: Database): void {
     db.run("CREATE INDEX idx_sessions_archived_at ON sessions(archived_at)");
     db.run("UPDATE schema_version SET version = 3");
   }
+
+  if (currentVersion < 4) {
+    db.run("ALTER TABLE agents ADD COLUMN color TEXT");
+    db.run("UPDATE schema_version SET version = 4");
+  }
 }
 
 export function getDb(): Database {

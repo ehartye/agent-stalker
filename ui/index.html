@@ -452,13 +452,22 @@ body {
 .filter-chip.active { border-color: var(--accent-green); color: var(--accent-green); background: var(--accent-green-dim); }
 
 .filter-chip .remove {
-  width: 12px;
-  height: 12px;
-  display: none;
+  font-size: 13px;
+  line-height: 1;
   opacity: 0.6;
   cursor: pointer;
 }
-.filter-chip.active .remove { display: inline-block; }
+.filter-chip .remove:hover { opacity: 1; }
+
+.filter-chips-bar {
+  display: none;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.filter-chips-bar.has-chips { display: flex; }
 
 select.filter-select {
   padding: 3px 8px;
@@ -819,6 +828,7 @@ body::after {
       <div class="toolbar-spacer"></div>
       <span class="event-count" id="eventCountLabel">0 events</span>
     </div>
+    <div class="filter-chips-bar" id="filterChipsBar"></div>
 
     <div class="timeline-container" id="timeline">
       <div class="timeline-empty">
@@ -856,6 +866,16 @@ function esc(s) {
   return d.innerHTML;
 }
 
+const NAMED_COLORS = { blue: '#60a5fa', green: '#34d399', yellow: '#fbbf24', red: '#f87171', purple: '#a78bfa', pink: '#f472b6', orange: '#fb923c', cyan: '#38bdf8' };
+function namedColor(name) { return NAMED_COLORS[name] || name; }
+const AGENT_COLORS = ['#a78bfa','#60a5fa','#34d399','#fbbf24','#f87171','#f472b6','#38bdf8','#4ade80','#fb923c','#c084fc'];
+function agentColor(name) {
+  if (!name || name === '__top_level__') return 'var(--accent-green)';
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return AGENT_COLORS[Math.abs(h) % AGENT_COLORS.length];
+}
+
 function taskStatusColor(status) {
   switch (status) {
     case 'completed': return 'var(--accent-green)';
@@ -881,7 +901,9 @@ const state = {
   toolFilter: '',
   eventTypeFilter: '',
   timeRangeFilter: '',
-  agentFilter: null,
+  agentFilter: null,       // agent id string, or '__top_level__' for session agent
+  agentFilterLabel: null,
+  agentFilterColor: null,
   isLive: true,
   lastTimestamp: 0,
 };
@@ -1093,7 +1115,15 @@ function renderAccordions() {
   el.innerHTML = ids.map(sid => {
     const session = allSessions.find(s => s.id === sid);
     if (!session) return '';
-    const agents = state.sessionAgents[sid] || [];
+    const rawAgents = state.sessionAgents[sid] || [];
+    // Deduplicate agents by agent_type, keeping the most recent entry
+    const agentMap = new Map();
+    rawAgents.forEach(a => {
+      const key = a.agent_type || a.id;
+      const existing = agentMap.get(key);
+      if (!existing || (a.started_at > existing.started_at)) agentMap.set(key, a);
+    });
+    const agents = [...agentMap.values()];
     const tasks = state.sessionTasks[sid] || [];
     const isActive = !session.ended_at;
     const dotColor = isActive ? 'var(--accent-green)' : 'var(--text-dim)';
@@ -1106,13 +1136,18 @@ function renderAccordions() {
         <span class="badge" style="font-size:10px;padding:1px 5px;border-radius:10px;background:var(--bg-card);color:var(--text-dim)">${agents.length}A ${tasks.length}T</span>
       </div>
       <div class="accordion-body">
-        <div class="accordion-sub-header">Agents (${agents.length})</div>
-        ${agents.length === 0 ? '<div style="padding:4px 8px;color:var(--text-dim);font-size:10px">(none)</div>' :
-          agents.map(a => {
+        <div class="accordion-sub-header">Agents (${agents.length + 1})</div>
+        <div class="sidebar-item" data-agent-filter="__top_level__" data-agent-label="Claude (session)" data-agent-color="${agentColor('__top_level__')}" data-session-scope="${esc(sid)}">
+          <span class="dot" style="background:${isActive ? agentColor('__top_level__') : 'var(--text-dim)'}"></span>
+          <span class="label">Claude (session)</span>
+        </div>
+        ${agents.map(a => {
             const isRunning = !a.ended_at;
-            return `<div class="sidebar-item" data-agent-filter="${esc(a.id)}" data-session-scope="${esc(sid)}">
-              <span class="dot" style="background:${isRunning ? 'var(--accent-purple)' : 'var(--text-dim)'}"></span>
-              <span class="label" title="${esc(a.id)}">${esc(a.agent_type || a.id.slice(0, 12))}</span>
+            const aName = a.agent_type || a.id.slice(0, 12);
+            const aColor = a.color ? namedColor(a.color) : agentColor(aName);
+            return `<div class="sidebar-item" data-agent-filter="${esc(a.id)}" data-agent-label="${esc(aName)}" data-agent-color="${aColor}" data-session-scope="${esc(sid)}">
+              <span class="dot" style="background:${isRunning ? aColor : 'var(--text-dim)'}"></span>
+              <span class="label" title="${esc(a.id)}">${esc(aName)}</span>
               ${a.team_name ? `<span class="badge">${esc(a.team_name)}</span>` : ''}
             </div>`;
           }).join('')}
@@ -1141,13 +1176,19 @@ function renderAccordions() {
     item.addEventListener('click', (e) => {
       e.stopPropagation();
       const agentId = item.dataset.agentFilter;
+      const agentLabel = item.dataset.agentLabel || agentId;
+      const aColor = item.dataset.agentColor || null;
       const wasActive = item.classList.contains('active');
       el.querySelectorAll('[data-agent-filter]').forEach(i => i.classList.remove('active'));
       if (wasActive) {
         state.agentFilter = null;
+        state.agentFilterLabel = null;
+        state.agentFilterColor = null;
       } else {
         item.classList.add('active');
         state.agentFilter = agentId;
+        state.agentFilterLabel = agentLabel;
+        state.agentFilterColor = aColor;
       }
       renderEvents();
     });
@@ -1176,6 +1217,44 @@ function formatTime(ts) {
   return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+function renderFilterChips() {
+  const bar = document.getElementById('filterChipsBar');
+  const chips = [];
+  if (state.agentFilter) {
+    chips.push({ label: `Agent: ${state.agentFilterLabel || state.agentFilter}`, key: 'agent', color: state.agentFilterColor });
+  }
+  if (state.toolFilter) {
+    chips.push({ label: `Tool: ${state.toolFilter}`, key: 'tool' });
+  }
+  if (state.eventTypeFilter) {
+    chips.push({ label: `Event: ${state.eventTypeFilter}`, key: 'eventType' });
+  }
+  if (state.timeRangeFilter) {
+    const labels = { '5m': '5 min', '15m': '15 min', '1h': '1 hour', '6h': '6 hours', '1d': '24 hours' };
+    chips.push({ label: `Time: Last ${labels[state.timeRangeFilter] || state.timeRangeFilter}`, key: 'timeRange' });
+  }
+  if (state.searchText) {
+    chips.push({ label: `Search: "${state.searchText}"`, key: 'search' });
+  }
+  bar.classList.toggle('has-chips', chips.length > 0);
+  if (chips.length === 0) { bar.innerHTML = ''; return; }
+  bar.innerHTML = chips.map(c => {
+    const colorStyle = c.color ? `border-color:${c.color};color:${c.color};background:${c.color}18` : '';
+    return `<span class="filter-chip active" data-chip-key="${c.key}" style="${colorStyle}"><span>${esc(c.label)}</span><span class="remove">×</span></span>`;
+  }).join('') + (chips.length > 1 ? '<span class="filter-chip" data-chip-key="__all__"><span>Clear all</span></span>' : '');
+  bar.querySelectorAll('[data-chip-key]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const key = chip.dataset.chipKey;
+      if (key === '__all__' || key === 'agent') { state.agentFilter = null; state.agentFilterLabel = null; state.agentFilterColor = null; }
+      if (key === '__all__' || key === 'tool') { state.toolFilter = ''; document.getElementById('toolFilter').value = ''; }
+      if (key === '__all__' || key === 'eventType') { state.eventTypeFilter = ''; document.getElementById('eventTypeFilter').value = ''; }
+      if (key === '__all__' || key === 'timeRange') { state.timeRangeFilter = ''; document.getElementById('timeRangeFilter').value = ''; }
+      if (key === '__all__' || key === 'search') { state.searchText = ''; document.getElementById('searchInput').value = ''; }
+      if (key === 'tool' || key === '__all__') { state.lastTimestamp = 0; loadEvents(); } else { renderEvents(); }
+    });
+  });
+}
+
 function renderEvents() {
   const container = document.getElementById('timeline');
   let events = state.events;
@@ -1187,7 +1266,11 @@ function renderEvents() {
 
   // Apply agent filter
   if (state.agentFilter) {
-    events = events.filter(e => e.agent_id === state.agentFilter);
+    if (state.agentFilter === '__top_level__') {
+      events = events.filter(e => !e.agent_id);
+    } else {
+      events = events.filter(e => e.agent_id === state.agentFilter);
+    }
   }
 
   // Apply time range filter
@@ -1209,6 +1292,7 @@ function renderEvents() {
   }
 
   document.getElementById('eventCountLabel').textContent = `${events.length} event${events.length !== 1 ? 's' : ''}`;
+  renderFilterChips();
 
   if (events.length === 0) {
     container.innerHTML = `<div class="timeline-empty">
