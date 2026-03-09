@@ -1053,7 +1053,8 @@ function renderSessionList(listId, sessions, countId, isArchived) {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const sid = btn.dataset.archive;
-      await fetch(`/api/sessions/${sid}/archive`, { method: 'POST' });
+      const res = await fetch(`/api/sessions/${sid}/archive`, { method: 'POST' });
+      if (!res.ok) return;
       state.selectedSessionIds.delete(sid);
       await loadSessions();
       loadSessionDetails();
@@ -1067,7 +1068,8 @@ function renderSessionList(listId, sessions, countId, isArchived) {
       e.stopPropagation();
       const sid = btn.dataset.delete;
       if (!confirm('Permanently delete this session and all its data?')) return;
-      await fetch(`/api/sessions/${sid}`, { method: 'DELETE' });
+      const res = await fetch(`/api/sessions/${sid}`, { method: 'DELETE' });
+      if (!res.ok) return;
       state.selectedSessionIds.delete(sid);
       await loadSessions();
       loadSessionDetails();
