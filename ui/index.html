@@ -1043,6 +1043,7 @@ function renderSessionList(listId, sessions, countId, isArchived) {
       const sid = cb.dataset.session;
       if (cb.checked) state.selectedSessionIds.add(sid);
       else state.selectedSessionIds.delete(sid);
+      state.agentFilter = null;
       renderSessionDropdown();
       loadSessionDetails();
       loadEvents();
