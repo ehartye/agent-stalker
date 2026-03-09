@@ -867,22 +867,22 @@ function taskStatusColor(status) {
 
 const API = '';
 const state = {
-  sessions: [],
+  activeSessions: [],
+  archivedSessions: [],
+  selectedSessionIds: new Set(),
+  sessionAgents: {},
+  sessionTasks: {},
   events: [],
-  agents: [],
   tools: [],
-  tasks: [],
   stats: {},
-  selectedSession: null,
-  selectedAgent: null,
   selectedEvent: null,
   searchText: '',
+  sessionSearchText: '',
   toolFilter: '',
   eventTypeFilter: '',
   timeRangeFilter: '',
   isLive: true,
   lastTimestamp: 0,
-  pollTimer: null,
 };
 
 // --- API ---
@@ -896,37 +896,50 @@ async function fetchJSON(url) {
 }
 
 async function loadSessions() {
-  const data = await fetchJSON('/api/sessions?limit=100');
-  if (data) {
-    state.sessions = data;
-    renderSessions();
-  }
+  const [active, archived] = await Promise.all([
+    fetchJSON('/api/sessions?limit=100'),
+    fetchJSON('/api/sessions?limit=100&archived=true'),
+  ]);
+  if (active) state.activeSessions = active;
+  if (archived) state.archivedSessions = archived;
+  renderSessionDropdown();
 }
 
-async function loadAgents() {
-  const url = state.selectedSession
-    ? `/api/agents?session=${state.selectedSession}`
-    : '/api/agents';
-  const data = await fetchJSON(url);
-  if (data) {
-    state.agents = data;
-    renderAgents();
-  }
+async function loadSessionDetails() {
+  const ids = [...state.selectedSessionIds];
+  const agentPromises = ids.map(id => fetchJSON(`/api/agents?session=${id}`));
+  const taskPromises = ids.map(id => fetchJSON(`/api/tasks?session=${id}`));
+  const [agentResults, taskResults] = await Promise.all([
+    Promise.all(agentPromises),
+    Promise.all(taskPromises),
+  ]);
+  state.sessionAgents = {};
+  state.sessionTasks = {};
+  ids.forEach((id, i) => {
+    state.sessionAgents[id] = agentResults[i] || [];
+    state.sessionTasks[id] = taskResults[i] || [];
+  });
+  renderAccordions();
 }
 
 async function loadEvents() {
-  let url = '/api/events?limit=500';
-  if (state.selectedSession) url += `&session=${state.selectedSession}`;
-  if (state.toolFilter) url += `&tool=${encodeURIComponent(state.toolFilter)}`;
-  if (state.selectedAgent) url += `&agent_id=${encodeURIComponent(state.selectedAgent)}`;
-  const data = await fetchJSON(url);
-  if (data) {
-    state.events = data;
-    if (data.length > 0) {
-      state.lastTimestamp = Math.max(...data.map(e => e.timestamp || 0));
-    }
+  const ids = [...state.selectedSessionIds];
+  if (ids.length === 0) {
+    state.events = [];
     renderEvents();
+    return;
   }
+  const promises = ids.map(id => {
+    let url = `/api/events?limit=500&session=${id}`;
+    if (state.toolFilter) url += `&tool=${encodeURIComponent(state.toolFilter)}`;
+    return fetchJSON(url);
+  });
+  const results = await Promise.all(promises);
+  state.events = results.flat().filter(Boolean).sort((a, b) => a.timestamp - b.timestamp);
+  if (state.events.length > 0) {
+    state.lastTimestamp = Math.max(...state.events.map(e => e.timestamp || 0));
+  }
+  renderEvents();
 }
 
 async function loadTools() {
@@ -934,14 +947,6 @@ async function loadTools() {
   if (data) {
     state.tools = data;
     renderToolFilter();
-  }
-}
-
-async function loadTasks() {
-  const data = await fetchJSON('/api/tasks');
-  if (data) {
-    state.tasks = data;
-    renderTasks();
   }
 }
 
@@ -963,14 +968,18 @@ async function loadEventDetail(id) {
 
 async function pollNewEvents() {
   if (!state.isLive || !state.lastTimestamp) return;
-  let url = `/api/events?since=${state.lastTimestamp}&limit=200`;
-  if (state.selectedSession) url += `&session=${state.selectedSession}`;
-  if (state.toolFilter) url += `&tool=${encodeURIComponent(state.toolFilter)}`;
-  if (state.selectedAgent) url += `&agent_id=${encodeURIComponent(state.selectedAgent)}`;
-  const data = await fetchJSON(url);
-  if (data && data.length > 0) {
-    state.events = state.events.concat(data);
-    state.lastTimestamp = Math.max(...data.map(e => e.timestamp || 0));
+  const ids = [...state.selectedSessionIds];
+  if (ids.length === 0) return;
+  const promises = ids.map(id => {
+    let url = `/api/events?since=${state.lastTimestamp}&limit=200&session=${id}`;
+    if (state.toolFilter) url += `&tool=${encodeURIComponent(state.toolFilter)}`;
+    return fetchJSON(url);
+  });
+  const results = await Promise.all(promises);
+  const newEvents = results.flat().filter(Boolean);
+  if (newEvents.length > 0) {
+    state.events = state.events.concat(newEvents).sort((a, b) => a.timestamp - b.timestamp);
+    state.lastTimestamp = Math.max(...newEvents.map(e => e.timestamp || 0));
     renderEvents();
     loadStats();
   }
@@ -978,102 +987,104 @@ async function pollNewEvents() {
 
 // --- Rendering ---
 
-function renderSessions() {
-  const el = document.getElementById('sessionList');
-  document.getElementById('sessionCount').textContent = state.sessions.length;
-  const teams = new Set();
+function sessionLabel(s) {
+  return s.cwd ? s.cwd.split('/').pop() || s.id.slice(0, 12) : s.id.slice(0, 12);
+}
 
-  el.innerHTML = state.sessions.map(s => {
-    if (s.team_name) teams.add(s.team_name);
+function sessionLastEvent(s) {
+  const ts = s.ended_at || s.started_at;
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+}
+
+function renderSessionDropdown() {
+  const count = state.selectedSessionIds.size;
+  const label = document.getElementById('sessionDropdownLabel');
+  if (count === 0) label.textContent = 'No sessions selected';
+  else if (count === 1) {
+    const s = [...state.activeSessions, ...state.archivedSessions].find(s => s.id === [...state.selectedSessionIds][0]);
+    label.textContent = s ? (s.cwd || '').split('/').pop() || s.id : '1 session';
+  } else {
+    label.textContent = `${count} sessions`;
+  }
+
+  renderSessionList('activeSessionList', state.activeSessions, 'activeSessionCount', false);
+  renderSessionList('archivedSessionList', state.archivedSessions, 'archivedSessionCount', true);
+}
+
+function renderSessionList(listId, sessions, countId, isArchived) {
+  const el = document.getElementById(listId);
+  const q = state.sessionSearchText.toLowerCase();
+  const filtered = q ? sessions.filter(s => sessionLabel(s).toLowerCase().includes(q) || s.id.toLowerCase().includes(q)) : sessions;
+  document.getElementById(countId).textContent = filtered.length;
+
+  el.innerHTML = filtered.map(s => {
+    const checked = state.selectedSessionIds.has(s.id) ? 'checked' : '';
     const isActive = !s.ended_at;
-    const dotColor = isActive ? 'var(--accent-green)' : 'var(--text-dim)';
-    const isSelected = state.selectedSession === s.id;
-    const label = s.cwd ? s.cwd.split('/').pop() || s.id : s.id;
-    return `<div class="sidebar-item ${isSelected ? 'active' : ''}" data-session="${esc(s.id)}">
-      <span class="dot" style="background:${dotColor}"></span>
-      <span class="label" title="${esc(s.id)}">${esc(label)}</span>
-      ${s.model ? `<span class="badge">${esc(s.model.split('-').pop())}</span>` : ''}
+    const actionBtn = isArchived
+      ? `<button class="session-action-btn delete" data-delete="${esc(s.id)}" title="Delete permanently">&#10005;</button>`
+      : `<button class="session-action-btn" data-archive="${esc(s.id)}" title="Archive">&#11015;</button>`;
+    return `<div class="session-row">
+      <input type="checkbox" data-session="${esc(s.id)}" ${checked}>
+      <span class="dot" style="background:${isActive ? 'var(--accent-green)' : 'var(--text-dim)'};width:6px;height:6px;border-radius:50%;flex-shrink:0"></span>
+      <div class="session-row-info">
+        <div class="session-row-label" title="${esc(s.id)}">${esc(sessionLabel(s))}</div>
+        <div class="session-row-subtitle">${esc(sessionLastEvent(s))}</div>
+      </div>
+      <div class="session-row-actions">${actionBtn}</div>
     </div>`;
   }).join('');
 
-  el.querySelectorAll('.sidebar-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const sid = item.dataset.session;
-      state.selectedSession = state.selectedSession === sid ? null : sid;
-      state.lastTimestamp = 0;
-      loadAll();
+  // Checkbox handlers
+  el.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const sid = cb.dataset.session;
+      if (cb.checked) state.selectedSessionIds.add(sid);
+      else state.selectedSessionIds.delete(sid);
+      renderSessionDropdown();
+      loadSessionDetails();
+      loadEvents();
     });
   });
 
-  renderTeams(teams);
-}
-
-function renderTeams(teams) {
-  const el = document.getElementById('teamList');
-  const teamArr = [...teams];
-  el.innerHTML = teamArr.map(t =>
-    `<div class="sidebar-item" data-team="${esc(t)}">
-      <span class="dot" style="background:var(--accent-amber)"></span>
-      <span class="label">${esc(t)}</span>
-    </div>`
-  ).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
-
-  el.querySelectorAll('.sidebar-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const team = item.dataset.team;
-      state.selectedSession = null;
-      state.lastTimestamp = 0;
-      // Filter sessions to those matching the team, then reload events
-      loadSessions().then(() => {
-        const match = state.sessions.find(s => s.team_name === team);
-        if (match) {
-          state.selectedSession = match.id;
-        }
-        loadAll();
-      });
+  // Archive handlers
+  el.querySelectorAll('[data-archive]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const sid = btn.dataset.archive;
+      await fetch(`/api/sessions/${sid}/archive`, { method: 'POST' });
+      state.selectedSessionIds.delete(sid);
+      await loadSessions();
+      loadSessionDetails();
+      loadEvents();
     });
   });
-}
 
-function renderAgents() {
-  const el = document.getElementById('agentList');
-  document.getElementById('agentCount').textContent = state.agents.length;
-  el.innerHTML = state.agents.map(a => {
-    const isSelected = state.selectedAgent === a.id;
-    const isActive = !a.ended_at;
-    return `<div class="sidebar-item ${isSelected ? 'active' : ''}" data-agent="${esc(a.id)}">
-      <span class="dot" style="background:${isActive ? 'var(--accent-purple)' : 'var(--text-dim)'}"></span>
-      <span class="label" title="${esc(a.id)}">${esc(a.agent_type || a.id.slice(0, 12))}</span>
-    </div>`;
-  }).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
-
-  el.querySelectorAll('.sidebar-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const aid = item.dataset.agent;
-      state.selectedAgent = state.selectedAgent === aid ? null : aid;
-      state.lastTimestamp = 0;
+  // Delete handlers
+  el.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const sid = btn.dataset.delete;
+      if (!confirm('Permanently delete this session and all its data?')) return;
+      await fetch(`/api/sessions/${sid}`, { method: 'DELETE' });
+      state.selectedSessionIds.delete(sid);
+      await loadSessions();
+      loadSessionDetails();
       loadEvents();
     });
   });
 }
 
-function renderTasks() {
-  const el = document.getElementById('taskList');
-  document.getElementById('taskCount').textContent = state.tasks.length;
-  el.innerHTML = state.tasks.map(t =>
-    `<div class="sidebar-item" data-task-id="${esc(t.id)}" title="${esc(t.id)}">
-      <span class="dot" style="background:${taskStatusColor(t.status)}"></span>
-      <span class="label">${esc(t.subject || t.id)}</span>
-      ${t.status ? `<span class="badge">${esc(t.status)}</span>` : ''}
-      ${t.owner ? `<span class="badge">${esc(t.owner)}</span>` : ''}
-    </div>`
-  ).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
-
-  el.querySelectorAll('.sidebar-item').forEach(item => {
-    item.addEventListener('click', () => {
-      showTaskDetail(item.dataset.taskId);
-    });
-  });
+// Placeholder for Task 5 — will be replaced with full accordion rendering
+function renderAccordions() {
+  const el = document.getElementById('sessionAccordions');
+  const ids = [...state.selectedSessionIds];
+  if (ids.length === 0) {
+    el.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:11px;text-align:center">Select sessions above to view agents and tasks</div>';
+    return;
+  }
+  el.innerHTML = ids.map(sid => `<div style="padding:8px 12px;font-size:11px;color:var(--text-secondary)">${esc(sid.slice(0, 12))}...</div>`).join('');
 }
 
 function renderToolFilter() {
@@ -1308,6 +1319,30 @@ document.getElementById('liveToggle').addEventListener('click', () => {
   label.textContent = state.isLive ? 'LIVE' : 'PAUSED';
 });
 
+// --- Session Dropdown ---
+
+document.getElementById('sessionDropdownTrigger').addEventListener('click', () => {
+  document.getElementById('sessionDropdownPanel').classList.toggle('open');
+});
+
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('sessionDropdownPanel');
+  const trigger = document.getElementById('sessionDropdownTrigger');
+  if (!panel.contains(e.target) && !trigger.contains(e.target)) {
+    panel.classList.remove('open');
+  }
+});
+
+document.getElementById('sessionSearchInput').addEventListener('input', (e) => {
+  state.sessionSearchText = e.target.value;
+  renderSessionDropdown();
+});
+
+document.getElementById('archivedGroupHeader').addEventListener('click', () => {
+  document.getElementById('archivedGroupHeader').classList.toggle('collapsed');
+  document.getElementById('archivedSessionList').classList.toggle('collapsed');
+});
+
 // --- Keyboard ---
 
 document.addEventListener('keydown', e => {
@@ -1321,14 +1356,15 @@ document.addEventListener('keydown', e => {
 // --- Init ---
 
 async function loadAll() {
-  await Promise.all([loadSessions(), loadAgents(), loadEvents(), loadTools(), loadTasks(), loadStats()]);
+  await Promise.all([loadSessions(), loadEvents(), loadTools(), loadStats()]);
+  await loadSessionDetails();
 }
 
 function startPolling() {
   setInterval(() => {
     if (state.isLive) {
       pollNewEvents();
-      loadTasks();
+      loadSessionDetails();
       loadStats();
     }
     document.getElementById('footerTime').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
