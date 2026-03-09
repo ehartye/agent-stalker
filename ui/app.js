@@ -8,7 +8,12 @@ function esc(s) {
 }
 
 const NAMED_COLORS = { blue: '#60a5fa', green: '#34d399', yellow: '#fbbf24', red: '#f87171', purple: '#a78bfa', pink: '#f472b6', orange: '#fb923c', cyan: '#38bdf8' };
-function namedColor(name) { return NAMED_COLORS[name] || name; }
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+function namedColor(name) {
+  if (NAMED_COLORS[name]) return NAMED_COLORS[name];
+  if (typeof name === 'string' && HEX_COLOR_RE.test(name)) return name;
+  return 'var(--text-dim)';
+}
 const AGENT_COLORS = ['#a78bfa','#60a5fa','#34d399','#fbbf24','#f87171','#f472b6','#38bdf8','#4ade80','#fb923c','#c084fc'];
 function agentColor(name) {
   if (!name || name === '__top_level__') return 'var(--accent-green)';
@@ -737,14 +742,15 @@ async function loadAll() {
   renderActivity();
 }
 
+let polling = false;
 function startPolling() {
-  setInterval(() => {
-    if (state.isLive) {
-      pollNewEvents();
-      loadSessionDetails();
-      loadStats();
-    }
+  setInterval(async () => {
     document.getElementById('footerTime').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+    if (!state.isLive || polling) return;
+    polling = true;
+    try {
+      await Promise.all([pollNewEvents(), loadSessionDetails(), loadStats()]);
+    } finally { polling = false; }
   }, 2000);
 }
 
