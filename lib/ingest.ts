@@ -58,8 +58,98 @@ function handleSessionEnd(event: Record<string, any>): void {
   recordEvent(event, { reason: event.reason });
 }
 
+function parseTaskIdFromResponse(response: any): string | null {
+  if (typeof response === "string") {
+    const match = response.match(/task\s+#?(\d+)/i);
+    return match ? match[1] : null;
+  }
+  if (response && typeof response === "object" && response.taskId) {
+    return String(response.taskId);
+  }
+  return null;
+}
+
+function handleTaskCreate(event: Record<string, any>): void {
+  const input = event.tool_input;
+  if (!input) return;
+  const taskId = parseTaskIdFromResponse(event.tool_response);
+  if (!taskId) return;
+
+  const db = getDb();
+  const now = Date.now();
+  const blocks = input.addBlocks ? JSON.stringify(input.addBlocks) : null;
+  const blockedBy = input.addBlockedBy ? JSON.stringify(input.addBlockedBy) : null;
+
+  db.run(
+    `INSERT OR IGNORE INTO tasks (id, session_id, subject, description, status, blocks, blocked_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+    [taskId, event.session_id, input.subject ?? null, input.description ?? null, blocks, blockedBy, now, now],
+  );
+
+  db.run(
+    `INSERT INTO task_events (task_id, session_id, event_type, timestamp)
+     VALUES (?, ?, 'created', ?)`,
+    [taskId, event.session_id, now],
+  );
+}
+
+function handleTaskUpdate(event: Record<string, any>): void {
+  const input = event.tool_input;
+  if (!input || !input.taskId) return;
+  const taskId = String(input.taskId);
+
+  const db = getDb();
+  const now = Date.now();
+
+  // Get current state
+  const current = db.query("SELECT * FROM tasks WHERE id = ?").get(taskId) as any;
+  if (!current) return;
+
+  // Record per-field events and build update
+  if (input.owner !== undefined && input.owner !== current.owner) {
+    db.run(
+      `INSERT INTO task_events (task_id, session_id, event_type, field_name, old_value, new_value, timestamp)
+       VALUES (?, ?, 'assigned', 'owner', ?, ?, ?)`,
+      [taskId, event.session_id, current.owner, input.owner, now],
+    );
+  }
+
+  if (input.status !== undefined && input.status !== current.status) {
+    db.run(
+      `INSERT INTO task_events (task_id, session_id, event_type, field_name, old_value, new_value, timestamp)
+       VALUES (?, ?, 'status_change', 'status', ?, ?, ?)`,
+      [taskId, event.session_id, current.status, input.status, now],
+    );
+  }
+
+  // Build dynamic UPDATE
+  const sets: string[] = ["updated_at = ?"];
+  const params: any[] = [now];
+
+  if (input.owner !== undefined) { sets.push("owner = ?"); params.push(input.owner); }
+  if (input.status !== undefined) { sets.push("status = ?"); params.push(input.status); }
+  if (input.subject !== undefined) { sets.push("subject = ?"); params.push(input.subject); }
+  if (input.description !== undefined) { sets.push("description = ?"); params.push(input.description); }
+  if (input.addBlocks) { sets.push("blocks = ?"); params.push(JSON.stringify(input.addBlocks)); }
+  if (input.addBlockedBy) { sets.push("blocked_by = ?"); params.push(JSON.stringify(input.addBlockedBy)); }
+  if (input.status === "completed") { sets.push("completed_at = ?"); params.push(now); }
+
+  params.push(taskId);
+  db.run(`UPDATE tasks SET ${sets.join(", ")} WHERE id = ?`, params);
+}
+
 function handleToolUse(event: Record<string, any>): void {
   ensureSession(event);
+
+  // Intercept PostToolUse for TaskCreate/TaskUpdate before truncation
+  if (event.hook_event_name === "PostToolUse") {
+    if (event.tool_name === "TaskCreate") {
+      handleTaskCreate(event);
+    } else if (event.tool_name === "TaskUpdate") {
+      handleTaskUpdate(event);
+    }
+  }
+
   const rule = getContentRule(event.tool_name ?? "default");
   const { tool_input, tool_response } = truncateContent(
     event.tool_name ?? "unknown",
@@ -90,10 +180,28 @@ function handleSubagentStop(event: Record<string, any>): void {
 function handleTaskCompleted(event: Record<string, any>): void {
   ensureSession(event);
   const db = getDb();
-  db.run(
-    "INSERT INTO tasks (id, session_id, subject, description, teammate_name, team_name, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [event.task_id, event.session_id, event.task_subject, event.task_description ?? null, event.teammate_name ?? null, event.team_name ?? null, Date.now()],
-  );
+  const now = Date.now();
+  const existing = db.query("SELECT * FROM tasks WHERE id = ?").get(event.task_id) as any;
+
+  if (existing) {
+    // Update existing tracked task
+    db.run(
+      "UPDATE tasks SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ?",
+      [now, now, event.task_id],
+    );
+    db.run(
+      `INSERT INTO task_events (task_id, session_id, event_type, field_name, old_value, new_value, timestamp)
+       VALUES (?, ?, 'completed', 'status', ?, 'completed', ?)`,
+      [event.task_id, event.session_id, existing.status, now],
+    );
+  } else {
+    // Fallback: create task with status='completed'
+    db.run(
+      "INSERT INTO tasks (id, session_id, subject, description, status, owner, team_name, completed_at, created_at, updated_at) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?)",
+      [event.task_id, event.session_id, event.task_subject, event.task_description ?? null, event.teammate_name ?? null, event.team_name ?? null, now, now, now],
+    );
+  }
+
   if (event.team_name) {
     db.run("UPDATE sessions SET team_name = ?, teammate_name = ? WHERE id = ? AND team_name IS NULL",
       [event.team_name, event.teammate_name ?? null, event.session_id]);

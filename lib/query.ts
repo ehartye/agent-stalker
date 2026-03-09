@@ -142,12 +142,44 @@ function cmdAgents(args: string[]): string {
 function cmdTasks(args: string[]): string {
   const db = getDb();
   const team = getFlag(args, "--team");
-  let query = "SELECT id, subject, teammate_name, team_name, completed_at FROM tasks";
+  const status = getFlag(args, "--status");
+  const owner = getFlag(args, "--owner");
+  let query = "SELECT id, subject, status, owner, team_name, completed_at FROM tasks WHERE 1=1";
   const params: any[] = [];
-  if (team) { query += " WHERE team_name = ?"; params.push(team); }
-  query += " ORDER BY completed_at DESC LIMIT 50";
+  if (team) { query += " AND team_name = ?"; params.push(team); }
+  if (status) { query += " AND status = ?"; params.push(status); }
+  if (owner) { query += " AND owner = ?"; params.push(owner); }
+  query += " ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 50";
   const rows = db.query(query).all(...params) as Record<string, any>[];
-  return formatTable(rows);
+  return formatTable(rows, ["id", "subject", "status", "owner", "team_name", "completed_at"]);
+}
+
+function cmdTask(args: string[]): string {
+  const id = args[1];
+  if (!id) return "Usage: task <id>";
+  const db = getDb();
+  const task = db.query("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, any> | null;
+  if (!task) return `Task '${id}' not found`;
+
+  let result = `Task #${task.id}\n`;
+  result += `Subject: ${task.subject ?? "(none)"}\n`;
+  result += `Description: ${task.description ?? "(none)"}\n`;
+  result += `Status: ${task.status}\n`;
+  result += `Owner: ${task.owner ?? "(unassigned)"}\n`;
+  result += `Team: ${task.team_name ?? "(none)"}\n`;
+  result += `Blocks: ${task.blocks ?? "(none)"}\n`;
+  result += `Blocked By: ${task.blocked_by ?? "(none)"}\n`;
+  result += `Created: ${task.created_at ?? "(unknown)"}\n`;
+  result += `Updated: ${task.updated_at ?? "(unknown)"}\n`;
+  result += `Completed: ${task.completed_at ?? "(not completed)"}\n\n`;
+
+  const events = db.query("SELECT event_type, field_name, old_value, new_value, timestamp FROM task_events WHERE task_id = ? ORDER BY timestamp ASC").all(id) as Record<string, any>[];
+  if (events.length > 0) {
+    result += "History:\n" + formatTable(events);
+  } else {
+    result += "History: (no events)";
+  }
+  return result;
 }
 
 function cmdStats(args: string[]): string {
@@ -179,9 +211,10 @@ export function runQuery(args: string[]): string {
     case "tools": return cmdTools(args);
     case "agents": return cmdAgents(args);
     case "tasks": return cmdTasks(args);
+    case "task": return cmdTask(args);
     case "stats": return cmdStats(args);
     default:
-      return `Unknown command: ${subcommand}\n\nAvailable: sessions, session, events, event, tools, agents, tasks, stats`;
+      return `Unknown command: ${subcommand}\n\nAvailable: sessions, session, events, event, tools, agents, tasks, task, stats`;
   }
 }
 
@@ -189,7 +222,7 @@ export function runQuery(args: string[]): string {
 if (import.meta.main) {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.log("Usage: stalker <command> [options]\n\nCommands: sessions, session, events, event, tools, agents, tasks, stats");
+    console.log("Usage: stalker <command> [options]\n\nCommands: sessions, session, events, event, tools, agents, tasks, task, stats");
   } else {
     console.log(runQuery(args));
   }

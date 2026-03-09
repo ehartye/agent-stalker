@@ -62,4 +62,83 @@ describe("query", () => {
     const result = runQuery(["event", "1"]);
     expect(result).toContain("SessionStart");
   });
+
+  describe("task queries", () => {
+    beforeEach(() => {
+      // Seed task data via PostToolUse TaskCreate + TaskUpdate
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "s1",
+        tool_name: "TaskCreate",
+        tool_input: { subject: "Build auth" },
+        tool_response: "Created task #1",
+        cwd: "/project-a",
+        permission_mode: "default",
+      });
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "s1",
+        tool_name: "TaskCreate",
+        tool_input: { subject: "Write tests" },
+        tool_response: "Created task #2",
+        cwd: "/project-a",
+        permission_mode: "default",
+      });
+      // Assign and start task 1
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "s1",
+        tool_name: "TaskUpdate",
+        tool_input: { taskId: "1", owner: "alice", status: "in_progress" },
+        tool_response: "Updated task #1 owner, status",
+        cwd: "/project-a",
+        permission_mode: "default",
+      });
+      // Complete task 2
+      ingestEvent({
+        hook_event_name: "PostToolUse",
+        session_id: "s1",
+        tool_name: "TaskUpdate",
+        tool_input: { taskId: "2", owner: "bob", status: "completed" },
+        tool_response: "Updated task #2 owner, status",
+        cwd: "/project-a",
+        permission_mode: "default",
+      });
+    });
+
+    it("tasks list shows status and owner", () => {
+      const result = runQuery(["tasks"]);
+      expect(result).toContain("status");
+      expect(result).toContain("owner");
+      expect(result).toContain("alice");
+      expect(result).toContain("bob");
+      expect(result).toContain("in_progress");
+      expect(result).toContain("completed");
+    });
+
+    it("--status filter works", () => {
+      const result = runQuery(["tasks", "--status", "completed"]);
+      expect(result).toContain("bob");
+      expect(result).not.toContain("alice");
+    });
+
+    it("--owner filter works", () => {
+      const result = runQuery(["tasks", "--owner", "alice"]);
+      expect(result).toContain("alice");
+      expect(result).not.toContain("bob");
+    });
+
+    it("task detail shows history", () => {
+      const result = runQuery(["task", "1"]);
+      expect(result).toContain("Build auth");
+      expect(result).toContain("created");
+      expect(result).toContain("assigned");
+      expect(result).toContain("status_change");
+    });
+
+    it("help text includes task", () => {
+      const result = runQuery(["unknown-cmd"]);
+      expect(result).toContain("task");
+    });
+  });
 });

@@ -16,5 +16,6 @@ Available subcommands:
 - `events [--session <id>] [--tool <name>] [--agent-id <id>] [--since <duration>]` — event log
 - `event <id>` — full event detail with content
 - `agents [--session <id>]` — agents spawned
-- `tasks [--team <name>]` — task completions
+- `tasks [--team <name>] [--status <status>] [--owner <name>]` — task list with status and owner
+- `task <id>` — task detail with full event history
 - `stats [--session <id>]` — summary statistics
