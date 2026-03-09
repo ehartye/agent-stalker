@@ -1,0 +1,10 @@
+{
+  "name": "agent-stalker",
+  "description": "Track agent team task assignment, messages, and tool use across Claude Code sessions",
+  "author": {
+    "name": "ehart"
+  },
+  "version": "0.1.0",
+  "license": "MIT",
+  "keywords": ["tracking", "observability", "agents", "teams", "tools"]
+}
