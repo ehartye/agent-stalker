@@ -685,6 +685,13 @@ body::after {
 </div>
 
 <script>
+function esc(s) {
+  if (s == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
 const API = '';
 const state = {
   sessions: [],
@@ -809,10 +816,10 @@ function renderSessions() {
     const dotColor = isActive ? 'var(--accent-green)' : 'var(--text-dim)';
     const isSelected = state.selectedSession === s.id;
     const label = s.cwd ? s.cwd.split('/').pop() || s.id : s.id;
-    return `<div class="sidebar-item ${isSelected ? 'active' : ''}" data-session="${s.id}">
+    return `<div class="sidebar-item ${isSelected ? 'active' : ''}" data-session="${esc(s.id)}">
       <span class="dot" style="background:${dotColor}"></span>
-      <span class="label" title="${s.id}">${label}</span>
-      ${s.model ? `<span class="badge">${s.model.split('-').pop()}</span>` : ''}
+      <span class="label" title="${esc(s.id)}">${esc(label)}</span>
+      ${s.model ? `<span class="badge">${esc(s.model.split('-').pop())}</span>` : ''}
     </div>`;
   }).join('');
 
@@ -832,11 +839,27 @@ function renderTeams(teams) {
   const el = document.getElementById('teamList');
   const teamArr = [...teams];
   el.innerHTML = teamArr.map(t =>
-    `<div class="sidebar-item" data-team="${t}">
+    `<div class="sidebar-item" data-team="${esc(t)}">
       <span class="dot" style="background:var(--accent-amber)"></span>
-      <span class="label">${t}</span>
+      <span class="label">${esc(t)}</span>
     </div>`
   ).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
+
+  el.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const team = item.dataset.team;
+      state.selectedSession = null;
+      state.lastTimestamp = 0;
+      // Filter sessions to those matching the team, then reload events
+      loadSessions().then(() => {
+        const match = state.sessions.find(s => s.team_name === team);
+        if (match) {
+          state.selectedSession = match.id;
+        }
+        loadAll();
+      });
+    });
+  });
 }
 
 function renderAgents() {
@@ -845,9 +868,9 @@ function renderAgents() {
   el.innerHTML = state.agents.map(a => {
     const isSelected = state.selectedAgent === a.id;
     const isActive = !a.ended_at;
-    return `<div class="sidebar-item ${isSelected ? 'active' : ''}" data-agent="${a.id}">
+    return `<div class="sidebar-item ${isSelected ? 'active' : ''}" data-agent="${esc(a.id)}">
       <span class="dot" style="background:${isActive ? 'var(--accent-purple)' : 'var(--text-dim)'}"></span>
-      <span class="label" title="${a.id}">${a.agent_type || a.id.slice(0, 12)}</span>
+      <span class="label" title="${esc(a.id)}">${esc(a.agent_type || a.id.slice(0, 12))}</span>
     </div>`;
   }).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
 
@@ -865,10 +888,10 @@ function renderTasks() {
   const el = document.getElementById('taskList');
   document.getElementById('taskCount').textContent = state.tasks.length;
   el.innerHTML = state.tasks.map(t =>
-    `<div class="sidebar-item" title="${t.id}">
+    `<div class="sidebar-item" title="${esc(t.id)}">
       <span class="dot" style="background:var(--accent-amber)"></span>
-      <span class="label">${t.subject || t.id}</span>
-      ${t.teammate_name ? `<span class="badge">${t.teammate_name}</span>` : ''}
+      <span class="label">${esc(t.subject || t.id)}</span>
+      ${t.teammate_name ? `<span class="badge">${esc(t.teammate_name)}</span>` : ''}
     </div>`
   ).join('') || '<div style="padding:6px 8px;color:var(--text-dim);font-size:11px">(none)</div>';
 }
@@ -939,12 +962,12 @@ function renderEvents() {
         else if (d.source) summary = d.source;
       } catch {}
     }
-    return `<div class="event-row" data-id="${e.id}">
+    return `<div class="event-row" data-id="${esc(e.id)}">
       <span class="time">${formatTime(e.timestamp)}</span>
-      <span class="event-type" data-type="${e.hook_event_name}">${e.hook_event_name}</span>
-      <span class="tool">${tool}</span>
-      <span class="agent-badge">${agent || '&mdash;'}</span>
-      <span class="summary" title="${summary}">${summary}</span>
+      <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
+      <span class="tool">${esc(tool)}</span>
+      <span class="agent-badge">${esc(agent) || '&mdash;'}</span>
+      <span class="summary" title="${esc(summary)}">${esc(summary)}</span>
     </div>`;
   }).join('');
 
@@ -994,15 +1017,15 @@ function renderDetail(event) {
   try { data = event.data ? JSON.parse(event.data) : null; } catch {}
 
   let html = `<div class="detail-grid">
-    <div class="detail-field"><div class="label">ID</div><div class="value">${event.id}</div></div>
-    <div class="detail-field"><div class="label">Type</div><div class="value">${event.hook_event_name}</div></div>
-    <div class="detail-field"><div class="label">Session</div><div class="value">${event.session_id}</div></div>
-    <div class="detail-field"><div class="label">Tool</div><div class="value">${event.tool_name || '(none)'}</div></div>
-    <div class="detail-field"><div class="label">Tool Use ID</div><div class="value">${event.tool_use_id || '(none)'}</div></div>
-    <div class="detail-field"><div class="label">Agent</div><div class="value">${event.agent_id || '(main thread)'}</div></div>
-    <div class="detail-field"><div class="label">Agent Type</div><div class="value">${event.agent_type || '(none)'}</div></div>
-    <div class="detail-field"><div class="label">Team</div><div class="value">${event.team_name || '(none)'}</div></div>
-    <div class="detail-field"><div class="label">Teammate</div><div class="value">${event.teammate_name || '(none)'}</div></div>
+    <div class="detail-field"><div class="label">ID</div><div class="value">${esc(event.id)}</div></div>
+    <div class="detail-field"><div class="label">Type</div><div class="value">${esc(event.hook_event_name)}</div></div>
+    <div class="detail-field"><div class="label">Session</div><div class="value">${esc(event.session_id)}</div></div>
+    <div class="detail-field"><div class="label">Tool</div><div class="value">${esc(event.tool_name || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Tool Use ID</div><div class="value">${esc(event.tool_use_id || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Agent</div><div class="value">${esc(event.agent_id || '(main thread)')}</div></div>
+    <div class="detail-field"><div class="label">Agent Type</div><div class="value">${esc(event.agent_type || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Team</div><div class="value">${esc(event.team_name || '(none)')}</div></div>
+    <div class="detail-field"><div class="label">Teammate</div><div class="value">${esc(event.teammate_name || '(none)')}</div></div>
     <div class="detail-field"><div class="label">Timestamp</div><div class="value">${event.timestamp ? new Date(event.timestamp).toISOString() : '(none)'}</div></div>
   </div>`;
 
