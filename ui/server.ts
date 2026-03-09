@@ -74,11 +74,32 @@ function handleApi(url: URL): Response {
 
   if (path === "/api/tasks") {
     const team = params.get("team");
-    let query = "SELECT * FROM tasks";
+    const status = params.get("status");
+    const owner = params.get("owner");
+    const session = params.get("session");
+    let query = "SELECT * FROM tasks WHERE 1=1";
     const qParams: any[] = [];
-    if (team) { query += " WHERE team_name = ?"; qParams.push(team); }
-    query += " ORDER BY completed_at DESC LIMIT 50";
+    if (team) { query += " AND team_name = ?"; qParams.push(team); }
+    if (status) { query += " AND status = ?"; qParams.push(status); }
+    if (owner) { query += " AND owner = ?"; qParams.push(owner); }
+    if (session) { query += " AND session_id = ?"; qParams.push(session); }
+    query += " ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 50";
     return jsonResponse(db.query(query).all(...qParams));
+  }
+
+  if (path.startsWith("/api/tasks/")) {
+    const rest = path.slice("/api/tasks/".length);
+    const parts = rest.split("/");
+    const taskId = parts[0];
+
+    if (parts[1] === "events") {
+      const events = db.query("SELECT * FROM task_events WHERE task_id = ? ORDER BY timestamp ASC").all(taskId);
+      return jsonResponse(events);
+    }
+
+    const task = db.query("SELECT * FROM tasks WHERE id = ?").get(taskId);
+    if (!task) return jsonResponse({ error: "Not found" }, 404);
+    return jsonResponse(task);
   }
 
   if (path === "/api/stats") {
