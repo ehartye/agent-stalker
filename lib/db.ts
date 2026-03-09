@@ -137,6 +137,12 @@ function runMigrations(db: Database): void {
 
     db.run("UPDATE schema_version SET version = 2");
   }
+
+  if (currentVersion < 3) {
+    db.run("ALTER TABLE sessions ADD COLUMN archived_at INTEGER");
+    db.run("CREATE INDEX idx_sessions_archived_at ON sessions(archived_at)");
+    db.run("UPDATE schema_version SET version = 3");
+  }
 }
 
 export function getDb(): Database {

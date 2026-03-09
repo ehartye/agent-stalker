@@ -105,12 +105,37 @@ describe("db", () => {
       expect(names).toContain("idx_task_events_timestamp");
     });
 
-    it("schema_version is 2", () => {
+    it("schema_version is at least 2", () => {
       const db = getDb();
       const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
-      expect(row.version).toBe(2);
+      expect(row.version).toBeGreaterThanOrEqual(2);
     });
 
+  });
+
+  describe("v3 migration", () => {
+    it("sessions table has archived_at column", () => {
+      const db = getDb();
+      const cols = db.query("PRAGMA table_info(sessions)").all() as { name: string }[];
+      const colNames = cols.map((c) => c.name);
+      expect(colNames).toContain("archived_at");
+    });
+
+    it("schema_version is 3", () => {
+      const db = getDb();
+      const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
+      expect(row.version).toBe(3);
+    });
+
+    it("archived_at index exists", () => {
+      const db = getDb();
+      const indexes = db.query("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='sessions'").all() as { name: string }[];
+      const names = indexes.map((i) => i.name);
+      expect(names).toContain("idx_sessions_archived_at");
+    });
+  });
+
+  describe("v2 migration - data migration", () => {
     it("migrates existing v1 tasks data", () => {
       // Manually create a v1-only database, insert data, then run migration
       const { Database } = require("bun:sqlite");
