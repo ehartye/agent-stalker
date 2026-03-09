@@ -187,41 +187,6 @@ body {
   overflow: hidden;
 }
 
-.sidebar-section {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.sidebar-section.grow { flex: 1; overflow: hidden; }
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px 6px;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-}
-
-.sidebar-header .count {
-  font-family: var(--font-mono);
-  font-weight: 400;
-  color: var(--text-dim);
-  font-size: 10px;
-}
-
-.sidebar-list {
-  overflow-y: auto;
-  padding: 0 6px 6px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-
 .sidebar-item {
   display: flex;
   align-items: center;
@@ -256,6 +221,196 @@ body {
   padding: 1px 5px;
   border-radius: 10px;
   background: var(--bg-card);
+  color: var(--text-dim);
+}
+
+/* Session Dropdown */
+.session-dropdown {
+  position: relative;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.session-dropdown-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.session-dropdown-trigger:hover { border-color: var(--border-bright); }
+.session-dropdown-trigger .chevron { font-size: 10px; color: var(--text-dim); }
+
+.session-dropdown-panel {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  right: 8px;
+  z-index: 100;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.session-dropdown-panel.open { display: block; }
+
+.session-search {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel);
+  z-index: 1;
+}
+.session-search input {
+  width: 100%;
+  padding: 5px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+}
+.session-search input:focus { border-color: var(--accent-green); }
+
+.session-group { border-bottom: 1px solid var(--border); }
+.session-group:last-child { border-bottom: none; }
+
+.session-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.session-group-header.collapsible { cursor: pointer; }
+.session-group-header.collapsible .chevron { transition: transform 0.2s; }
+.session-group-header.collapsed .chevron { transform: rotate(-90deg); }
+.session-group-list.collapsed { display: none; }
+
+.session-group-header .count {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 10px;
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 11px;
+}
+.session-row:hover { background: var(--bg-hover); }
+
+.session-row input[type="checkbox"] {
+  accent-color: var(--accent-green);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.session-row-info {
+  flex: 1;
+  min-width: 0;
+}
+.session-row-label {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-row-subtitle {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.session-row-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.session-row:hover .session-row-actions { opacity: 1; }
+
+.session-action-btn {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.session-action-btn:hover { border-color: var(--border-bright); color: var(--text-primary); }
+.session-action-btn.delete { color: var(--accent-red); }
+.session-action-btn.delete:hover { border-color: var(--accent-red); background: var(--accent-red-dim); }
+
+/* Session Accordions */
+.session-accordions {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.accordion-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+.accordion-header:hover { background: var(--bg-hover); }
+.accordion-header .chevron {
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+}
+.accordion-header.collapsed .chevron { transform: rotate(-90deg); }
+
+.accordion-body {
+  padding: 0 8px 8px;
+}
+.accordion-header.collapsed + .accordion-body { display: none; }
+
+.accordion-sub-header {
+  padding: 4px 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--text-dim);
 }
 
@@ -607,22 +762,31 @@ body::after {
   </header>
 
   <aside class="sidebar">
-    <div class="sidebar-section grow">
-      <div class="sidebar-header">Sessions <span class="count" id="sessionCount">0</span></div>
-      <div class="sidebar-list" id="sessionList"></div>
+    <div class="session-dropdown">
+      <button class="session-dropdown-trigger" id="sessionDropdownTrigger">
+        <span id="sessionDropdownLabel">No sessions selected</span>
+        <span class="chevron">&#9662;</span>
+      </button>
+      <div class="session-dropdown-panel" id="sessionDropdownPanel">
+        <div class="session-search">
+          <input type="text" id="sessionSearchInput" placeholder="Search sessions..." autocomplete="off">
+        </div>
+        <div class="session-group">
+          <div class="session-group-header" id="activeGroupHeader">
+            Active <span class="count" id="activeSessionCount">0</span>
+          </div>
+          <div class="session-group-list" id="activeSessionList"></div>
+        </div>
+        <div class="session-group">
+          <div class="session-group-header collapsible collapsed" id="archivedGroupHeader">
+            Archived <span class="count" id="archivedSessionCount">0</span>
+            <span class="chevron">&#9662;</span>
+          </div>
+          <div class="session-group-list collapsed" id="archivedSessionList"></div>
+        </div>
+      </div>
     </div>
-    <div class="sidebar-section">
-      <div class="sidebar-header">Agents <span class="count" id="agentCount">0</span></div>
-      <div class="sidebar-list" id="agentList" style="max-height:150px"></div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-header">Teams</div>
-      <div class="sidebar-list" id="teamList" style="max-height:120px"></div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-header">Tasks <span class="count" id="taskCount">0</span></div>
-      <div class="sidebar-list" id="taskList" style="max-height:120px"></div>
-    </div>
+    <div class="session-accordions" id="sessionAccordions"></div>
   </aside>
 
   <main class="main">
