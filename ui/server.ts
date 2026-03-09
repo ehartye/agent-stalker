@@ -87,7 +87,8 @@ function handleApi(url: URL, method: string): Response {
     if (toolName) { query += " AND tool_name = ?"; qParams.push(toolName); }
     if (agentId) { query += " AND agent_id = ?"; qParams.push(agentId); }
     if (since) { query += " AND timestamp > ?"; qParams.push(parseInt(since)); }
-    query += " ORDER BY timestamp ASC LIMIT ? OFFSET ?";
+    const order = since ? "ASC" : "DESC";
+    query += ` ORDER BY timestamp ${order} LIMIT ? OFFSET ?`;
     qParams.push(limit, offset);
     return jsonResponse(db.query(query).all(...qParams));
   }
