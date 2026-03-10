@@ -1,5 +1,6 @@
 import { ingestEvent } from "../lib/ingest";
 import { closeDb } from "../lib/db";
+import { isPaused } from "../lib/config";
 
 async function main() {
   const chunks: Buffer[] = [];
@@ -13,6 +14,9 @@ async function main() {
 
   try {
     const event = JSON.parse(raw);
+    if (event.cwd && isPaused(event.cwd)) {
+      process.exit(0);
+    }
     ingestEvent(event);
   } catch (err) {
     console.error(`agent-stalker: failed to ingest event: ${err}`);
