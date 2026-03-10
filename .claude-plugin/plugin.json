@@ -4,7 +4,7 @@
   "author": {
     "name": "ehart"
   },
-  "version": "0.3.1",
+  "version": "0.3.2",
   "license": "MIT",
   "keywords": ["tracking", "observability", "agents", "teams", "tools"]
 }

@@ -305,6 +305,8 @@ function renderSessionList(listId, sessions, countId, isArchived) {
 
 // --- Chip Bar ---
 
+let _lastChipBarKey = '';
+
 function renderChipBar() {
   const bar = document.getElementById('chipBar');
   const ids = [...state.selectedSessionIds];
@@ -385,6 +387,11 @@ function renderChipBar() {
     html += `<div class="chip-clear" id="chipClearAll">Clear</div>`;
   }
 
+  // Skip re-render if chip bar content hasn't changed
+  const chipBarKey = html;
+  if (chipBarKey === _lastChipBarKey) return;
+  _lastChipBarKey = chipBarKey;
+
   bar.innerHTML = html;
 
   // Agent chip click — toggle in set
@@ -439,6 +446,8 @@ function renderChipBar() {
 
 // --- Kanban ---
 
+let _lastKanbanKey = '';
+
 function renderKanban() {
   const panel = document.getElementById('kanbanPanel');
   const ids = [...state.selectedSessionIds];
@@ -450,6 +459,11 @@ function renderKanban() {
     const labels = new Set([...state.agentFilters].map(id => getAgentLabel(id)));
     allTasks = allTasks.filter(t => labels.has(t.owner || 'Claude (session)'));
   }
+
+  // Skip re-render if task data hasn't changed
+  const kanbanKey = JSON.stringify(allTasks.map(t => [t.id, t.session_id, t.status, t.subject, t.owner, t.updated_at, t.blocked_by]));
+  if (kanbanKey === _lastKanbanKey) return;
+  _lastKanbanKey = kanbanKey;
 
   const pending = allTasks.filter(t => t.status === 'pending');
   const inProgress = allTasks.filter(t => t.status === 'in_progress');
@@ -486,11 +500,16 @@ function renderKanban() {
     </div>`;
   }
 
+  // Preserve scroll position across re-render
+  const prevScroll = panel.scrollTop;
+
   panel.innerHTML = `<div class="kanban">
     ${col('Pending', pending, 'var(--amber)')}
     ${col('In Progress', inProgress, 'var(--accent-blue)')}
     ${col('Completed', completed, 'var(--accent-green)')}
   </div>`;
+
+  panel.scrollTop = prevScroll;
 
   panel.querySelectorAll('[data-task-id]').forEach(card => {
     card.addEventListener('click', () => showTaskModal(card.dataset.taskId, card.dataset.taskSession));
@@ -511,6 +530,8 @@ function getEventSummary(event) {
   } catch {}
   return '';
 }
+
+let _lastActivityKey = '';
 
 function renderActivity() {
   const panel = document.getElementById('activityPanel');
@@ -655,7 +676,32 @@ function renderActivity() {
   });
 
   html += '</div>';
+
+  // Skip full re-render if content hasn't changed
+  const activityKey = events.map(e => e.id).join(',');
+  if (activityKey === _lastActivityKey) return;
+  _lastActivityKey = activityKey;
+
+  // Save accordion expanded states and scroll position before re-render
+  const expandedGroups = new Set();
+  panel.querySelectorAll('.tool-card.expanded [data-toggle-group]').forEach(h => {
+    expandedGroups.add(h.dataset.toggleGroup);
+  });
+  const scroll = document.getElementById('activityScroll');
+  const prevScrollTop = scroll ? scroll.scrollTop : 0;
+  const prevScrollHeight = scroll ? scroll.scrollHeight : 0;
+  const wasAtBottom = scroll ? (scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 20) : true;
+
   panel.innerHTML = html;
+
+  // Restore accordion expanded states
+  if (expandedGroups.size > 0) {
+    panel.querySelectorAll('[data-toggle-group]').forEach(header => {
+      if (expandedGroups.has(header.dataset.toggleGroup)) {
+        header.closest('.tool-card').classList.add('expanded');
+      }
+    });
+  }
 
   panel.querySelectorAll('[data-toggle-group]').forEach(header => {
     header.addEventListener('click', () => header.closest('.tool-card').classList.toggle('expanded'));
@@ -665,11 +711,15 @@ function renderActivity() {
     link.addEventListener('click', (e) => { e.stopPropagation(); showEventModal(link.dataset.detailId); });
   });
 
-  // Scroll to bottom in live mode (skip if loading older events), attach lazy-load listener
-  const scroll = document.getElementById('activityScroll');
-  if (scroll) {
-    if (state.isLive && !state.loadingMore) scroll.scrollTop = scroll.scrollHeight;
-    scroll.addEventListener('scroll', onActivityScroll);
+  // Restore scroll position: scroll to bottom only if was already at bottom in live mode
+  const scrollAfter = document.getElementById('activityScroll');
+  if (scrollAfter) {
+    if (state.isLive && wasAtBottom && !state.loadingMore) {
+      scrollAfter.scrollTop = scrollAfter.scrollHeight;
+    } else {
+      scrollAfter.scrollTop = prevScrollTop;
+    }
+    scrollAfter.addEventListener('scroll', onActivityScroll);
   }
 }
 
