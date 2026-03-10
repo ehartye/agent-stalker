@@ -1,10 +1,11 @@
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 
 export type ContentRule = "full" | "metadata" | { maxLength: number };
 
 export interface StalkerConfig {
   contentRules: Record<string, ContentRule>;
+  pausedPaths: string[];
 }
 
 export const DEFAULT_CONFIG: StalkerConfig = {
@@ -17,6 +18,7 @@ export const DEFAULT_CONFIG: StalkerConfig = {
     Bash: { maxLength: 2000 },
     default: { maxLength: 500 },
   },
+  pausedPaths: [],
 };
 
 function getConfigPath(): string {
@@ -37,6 +39,7 @@ export function getConfig(): StalkerConfig {
     const parsed = JSON.parse(raw);
     return {
       contentRules: { ...DEFAULT_CONFIG.contentRules, ...parsed.contentRules },
+      pausedPaths: parsed.pausedPaths ?? [],
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -46,4 +49,30 @@ export function getConfig(): StalkerConfig {
 export function getContentRule(toolName: string): ContentRule {
   const config = getConfig();
   return config.contentRules[toolName] ?? config.contentRules.default ?? { maxLength: 500 };
+}
+
+export function isPaused(cwd: string): boolean {
+  const config = getConfig();
+  return config.pausedPaths.some(
+    (p) => cwd === p || cwd.startsWith(p + "/"),
+  );
+}
+
+export function writeConfig(config: StalkerConfig): void {
+  const configPath = getConfigPath();
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+}
+
+export function addPausedPath(path: string): void {
+  const config = getConfig();
+  if (!config.pausedPaths.includes(path)) {
+    config.pausedPaths.push(path);
+    writeConfig(config);
+  }
+}
+
+export function removePausedPath(path: string): void {
+  const config = getConfig();
+  config.pausedPaths = config.pausedPaths.filter((p) => p !== path);
+  writeConfig(config);
 }
