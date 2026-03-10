@@ -63,8 +63,9 @@ function parseTaskIdFromResponse(response: any): string | null {
     const match = response.match(/task\s+#?(\d+)/i);
     return match ? match[1] : null;
   }
-  if (response && typeof response === "object" && response.taskId) {
-    return String(response.taskId);
+  if (response && typeof response === "object") {
+    if (response.taskId) return String(response.taskId);
+    if (response.task?.id) return String(response.task.id);
   }
   return null;
 }
