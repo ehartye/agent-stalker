@@ -463,7 +463,7 @@ function renderKanban() {
           const ownerDisplay = t.owner || 'Claude';
           const ownerColor = t.owner ? agentColor(t.owner) : agentColor('__top_level__');
           const ts = t.updated_at || t.created_at;
-          return `<div class="kanban-card" data-task-id="${esc(t.id)}">
+          return `<div class="kanban-card" data-task-id="${esc(t.id)}" data-task-session="${esc(t.session_id)}">
             <div class="kanban-card-header">
               <span class="kanban-card-id">#${esc(t.id)}</span>
               ${hasBlocker ? '<span class="kanban-card-blocked">Blocked</span>' : ''}
@@ -493,7 +493,7 @@ function renderKanban() {
   </div>`;
 
   panel.querySelectorAll('[data-task-id]').forEach(card => {
-    card.addEventListener('click', () => showTaskModal(card.dataset.taskId));
+    card.addEventListener('click', () => showTaskModal(card.dataset.taskId, card.dataset.taskSession));
   });
 }
 
@@ -746,10 +746,11 @@ function updateModalNav() {
   document.getElementById('modalNext').disabled = modalCurrentIndex >= modalEventIds.length - 1;
 }
 
-async function showTaskModal(taskId) {
-  const task = await fetchJSON(`/api/tasks/${encodeURIComponent(taskId)}`);
+async function showTaskModal(taskId, sessionId) {
+  const sessionParam = sessionId ? `?session=${encodeURIComponent(sessionId)}` : '';
+  const task = await fetchJSON(`/api/tasks/${encodeURIComponent(taskId)}${sessionParam}`);
   if (!task) return;
-  const events = await fetchJSON(`/api/tasks/${encodeURIComponent(taskId)}/events`) || [];
+  const events = await fetchJSON(`/api/tasks/${encodeURIComponent(taskId)}/events${sessionParam}`) || [];
 
   document.getElementById('modalPrev').style.display = 'none';
   document.getElementById('modalNext').style.display = 'none';

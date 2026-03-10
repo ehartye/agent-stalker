@@ -231,6 +231,63 @@ describe("ingestEvent", () => {
     });
   });
 
+  describe("Task re-creation within same session", () => {
+    it("resets completed task to pending when re-created with same number", () => {
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-reuse1", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      // Create task #1
+      ingestEvent({
+        hook_event_name: "PostToolUse", session_id: "sess-reuse1", tool_name: "TaskCreate",
+        tool_input: { subject: "First iteration" }, tool_response: "Created task #1",
+        cwd: "/tmp", permission_mode: "default",
+      });
+      // Complete task #1
+      ingestEvent({
+        hook_event_name: "PostToolUse", session_id: "sess-reuse1", tool_name: "TaskUpdate",
+        tool_input: { taskId: "1", status: "completed" }, tool_response: "Updated task #1 status",
+        cwd: "/tmp", permission_mode: "default",
+      });
+      const db = getDb();
+      let task = db.query("SELECT * FROM tasks WHERE id = '1' AND session_id = 'sess-reuse1'").get() as any;
+      expect(task.status).toBe("completed");
+
+      // Re-create task #1 (new series)
+      ingestEvent({
+        hook_event_name: "PostToolUse", session_id: "sess-reuse1", tool_name: "TaskCreate",
+        tool_input: { subject: "Second iteration" }, tool_response: "Created task #1",
+        cwd: "/tmp", permission_mode: "default",
+      });
+      task = db.query("SELECT * FROM tasks WHERE id = '1' AND session_id = 'sess-reuse1'").get() as any;
+      expect(task.status).toBe("pending");
+      expect(task.subject).toBe("Second iteration");
+    });
+  });
+
+  describe("Task isolation across sessions", () => {
+    it("allows same task number in different sessions", () => {
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-iso1", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-iso2", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
+      // Create task #1 in session 1
+      ingestEvent({
+        hook_event_name: "PostToolUse", session_id: "sess-iso1", tool_name: "TaskCreate",
+        tool_input: { subject: "Session 1 task" }, tool_response: "Created task #1",
+        cwd: "/tmp", permission_mode: "default",
+      });
+      // Create task #1 in session 2
+      ingestEvent({
+        hook_event_name: "PostToolUse", session_id: "sess-iso2", tool_name: "TaskCreate",
+        tool_input: { subject: "Session 2 task" }, tool_response: "Created task #1",
+        cwd: "/tmp", permission_mode: "default",
+      });
+      const db = getDb();
+      const task1 = db.query("SELECT * FROM tasks WHERE id = '1' AND session_id = 'sess-iso1'").get() as any;
+      const task2 = db.query("SELECT * FROM tasks WHERE id = '1' AND session_id = 'sess-iso2'").get() as any;
+      expect(task1).not.toBeNull();
+      expect(task2).not.toBeNull();
+      expect(task1.subject).toBe("Session 1 task");
+      expect(task2.subject).toBe("Session 2 task");
+    });
+  });
+
   describe("TaskCompleted fallback behavior", () => {
     it("creates task if not already tracked", () => {
       ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-tf1", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });

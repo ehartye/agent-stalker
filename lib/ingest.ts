@@ -81,7 +81,7 @@ function handleTaskCreate(event: Record<string, any>): void {
   const blockedBy = input.addBlockedBy ? JSON.stringify(input.addBlockedBy) : null;
 
   db.run(
-    `INSERT OR IGNORE INTO tasks (id, session_id, subject, description, status, blocks, blocked_by, created_at, updated_at)
+    `INSERT OR REPLACE INTO tasks (id, session_id, subject, description, status, blocks, blocked_by, created_at, updated_at)
      VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
     [taskId, event.session_id, input.subject ?? null, input.description ?? null, blocks, blockedBy, now, now],
   );
@@ -102,7 +102,7 @@ function handleTaskUpdate(event: Record<string, any>): void {
   const now = Date.now();
 
   // Get current state
-  const current = db.query("SELECT * FROM tasks WHERE id = ?").get(taskId) as any;
+  const current = db.query("SELECT * FROM tasks WHERE id = ? AND session_id = ?").get(taskId, event.session_id) as any;
   if (!current) return;
 
   // Record per-field events and build update
@@ -134,8 +134,8 @@ function handleTaskUpdate(event: Record<string, any>): void {
   if (input.addBlockedBy) { sets.push("blocked_by = ?"); params.push(JSON.stringify(input.addBlockedBy)); }
   if (input.status === "completed") { sets.push("completed_at = ?"); params.push(now); }
 
-  params.push(taskId);
-  db.run(`UPDATE tasks SET ${sets.join(", ")} WHERE id = ?`, params);
+  params.push(taskId, event.session_id);
+  db.run(`UPDATE tasks SET ${sets.join(", ")} WHERE id = ? AND session_id = ?`, params);
 }
 
 function handleToolUse(event: Record<string, any>): void {
@@ -184,13 +184,13 @@ function handleTaskCompleted(event: Record<string, any>): void {
   ensureSession(event);
   const db = getDb();
   const now = Date.now();
-  const existing = db.query("SELECT * FROM tasks WHERE id = ?").get(event.task_id) as any;
+  const existing = db.query("SELECT * FROM tasks WHERE id = ? AND session_id = ?").get(event.task_id, event.session_id) as any;
 
   if (existing) {
     // Update existing tracked task
     db.run(
-      "UPDATE tasks SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ?",
-      [now, now, event.task_id],
+      "UPDATE tasks SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ? AND session_id = ?",
+      [now, now, event.task_id, event.session_id],
     );
     db.run(
       `INSERT INTO task_events (task_id, session_id, event_type, field_name, old_value, new_value, timestamp)

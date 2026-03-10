@@ -128,12 +128,22 @@ function handleApi(url: URL, method: string): Response {
     const rest = path.slice("/api/tasks/".length);
     const parts = rest.split("/");
     const taskId = parts[0];
+    const session = params.get("session");
 
     if (parts[1] === "events") {
+      if (session) {
+        const events = db.query("SELECT * FROM task_events WHERE task_id = ? AND session_id = ? ORDER BY timestamp ASC").all(taskId, session);
+        return jsonResponse(events);
+      }
       const events = db.query("SELECT * FROM task_events WHERE task_id = ? ORDER BY timestamp ASC").all(taskId);
       return jsonResponse(events);
     }
 
+    if (session) {
+      const task = db.query("SELECT * FROM tasks WHERE id = ? AND session_id = ?").get(taskId, session);
+      if (!task) return jsonResponse({ error: "Not found" }, 404);
+      return jsonResponse(task);
+    }
     const task = db.query("SELECT * FROM tasks WHERE id = ?").get(taskId);
     if (!task) return jsonResponse({ error: "Not found" }, 404);
     return jsonResponse(task);

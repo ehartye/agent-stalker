@@ -148,6 +148,34 @@ function runMigrations(db: Database): void {
     db.run("ALTER TABLE agents ADD COLUMN color TEXT");
     db.run("UPDATE schema_version SET version = 4");
   }
+
+  if (currentVersion < 5) {
+    // Fix: tasks PK was id alone, causing collisions when different sessions
+    // or repeated task series use the same task numbers (1, 2, 3...).
+    // Migrate to composite PK (id, session_id).
+    db.run(`CREATE TABLE tasks_v3 (
+      id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      subject TEXT,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      owner TEXT,
+      team_name TEXT,
+      blocks TEXT,
+      blocked_by TEXT,
+      created_at INTEGER,
+      updated_at INTEGER,
+      completed_at INTEGER,
+      PRIMARY KEY (id, session_id),
+      FOREIGN KEY (session_id) REFERENCES sessions(id)
+    )`);
+    db.run(`INSERT INTO tasks_v3 (id, session_id, subject, description, status, owner, team_name, blocks, blocked_by, created_at, updated_at, completed_at)
+      SELECT id, session_id, subject, description, status, owner, team_name, blocks, blocked_by, created_at, updated_at, completed_at
+      FROM tasks`);
+    db.run("DROP TABLE tasks");
+    db.run("ALTER TABLE tasks_v3 RENAME TO tasks");
+    db.run("UPDATE schema_version SET version = 5");
+  }
 }
 
 export function getDb(): Database {
