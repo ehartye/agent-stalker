@@ -156,12 +156,21 @@ function cmdTasks(args: string[]): string {
 
 function cmdTask(args: string[]): string {
   const id = args[1];
-  if (!id) return "Usage: task <id>";
+  if (!id) return "Usage: task <id> [--session <session_id>]";
   const db = getDb();
-  const task = db.query("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, any> | null;
+  const sessionId = getFlag(args, "--session");
+
+  let task: Record<string, any> | null;
+  if (sessionId) {
+    task = db.query("SELECT * FROM tasks WHERE id = ? AND session_id = ?").get(id, sessionId) as Record<string, any> | null;
+  } else {
+    // Without session, return the most recently updated match
+    task = db.query("SELECT * FROM tasks WHERE id = ? ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 1").get(id) as Record<string, any> | null;
+  }
   if (!task) return `Task '${id}' not found`;
 
   let result = `Task #${task.id}\n`;
+  result += `Session: ${task.session_id}\n`;
   result += `Subject: ${task.subject ?? "(none)"}\n`;
   result += `Description: ${task.description ?? "(none)"}\n`;
   result += `Status: ${task.status}\n`;
@@ -173,7 +182,10 @@ function cmdTask(args: string[]): string {
   result += `Updated: ${task.updated_at ?? "(unknown)"}\n`;
   result += `Completed: ${task.completed_at ?? "(not completed)"}\n\n`;
 
-  const events = db.query("SELECT event_type, field_name, old_value, new_value, timestamp FROM task_events WHERE task_id = ? ORDER BY timestamp ASC").all(id) as Record<string, any>[];
+  const eventsQuery = sessionId
+    ? db.query("SELECT event_type, field_name, old_value, new_value, timestamp FROM task_events WHERE task_id = ? AND session_id = ? ORDER BY timestamp ASC").all(id, sessionId)
+    : db.query("SELECT event_type, field_name, old_value, new_value, timestamp FROM task_events WHERE task_id = ? ORDER BY timestamp ASC").all(id);
+  const events = eventsQuery as Record<string, any>[];
   if (events.length > 0) {
     result += "History:\n" + formatTable(events);
   } else {

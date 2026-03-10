@@ -143,10 +143,10 @@ describe("db", () => {
       expect(colNames).toContain("color");
     });
 
-    it("schema_version is 4", () => {
+    it("schema_version is 5", () => {
       const db = getDb();
       const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
-      expect(row.version).toBe(4);
+      expect(row.version).toBe(5);
     });
   });
 
