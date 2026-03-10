@@ -656,7 +656,6 @@ function renderActivity() {
             <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
             <span class="tool-card-summary">${esc(getEventSummary(e))}</span>
             ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
-            <span style="flex:1"></span>
             <span class="tool-card-time">${formatTime(e.timestamp)}</span>
           </div>
           <div class="tool-card-body">
@@ -667,8 +666,8 @@ function renderActivity() {
       } else {
         html += `<div class="standalone-event">
           <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
-          ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
           <span style="flex:1"></span>
+          ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
           <span class="tool-card-time">${formatTime(e.timestamp)}</span>
         </div>`;
       }
@@ -938,3 +937,13 @@ function startPolling() {
 
 loadAll().then(startPolling);
 document.getElementById('footerTime').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+// Force immediate poll when tab becomes visible (browsers throttle background tabs)
+document.addEventListener('visibilitychange', async () => {
+  if (!document.hidden && state.isLive && !polling) {
+    polling = true;
+    try {
+      await Promise.all([pollNewEvents(), loadSessionDetails(), loadStats()]);
+    } finally { polling = false; }
+  }
+});
