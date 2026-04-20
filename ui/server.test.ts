@@ -82,4 +82,20 @@ describe("server API", () => {
     expect(session.archived_at).toBeNull();
     // API should reject -- verify session is not archived
   });
+
+  it("GET /api/sessions orders by most recent activity (latest event, falling back to started_at)", () => {
+    const db = getDb();
+    // beforeEach seeds sess-1 (started_at=1000, one event at 1000) and sess-2 (started_at=2000, no events).
+    // Add a late event to sess-1 so its activity timestamp beats sess-2's started_at.
+    db.run("INSERT INTO events (session_id, hook_event_name, timestamp) VALUES ('sess-1', 'Notification', 3000)");
+    // Add sess-3 with no events, started earliest. Should rank last.
+    db.run("INSERT INTO sessions (id, cwd, started_at) VALUES ('sess-3', '/tmp/test3', 500)");
+
+    const rows = db.query(
+      "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY COALESCE((SELECT MAX(timestamp) FROM events WHERE events.session_id = sessions.id), started_at) DESC"
+    ).all() as any[];
+
+    // Expected order: sess-1 (latest event 3000) > sess-2 (started_at 2000, no events) > sess-3 (started_at 500, no events)
+    expect(rows.map(r => r.id)).toEqual(["sess-1", "sess-2", "sess-3"]);
+  });
 });

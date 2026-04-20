@@ -29,7 +29,7 @@ function handleApi(url: URL, method: string): Response {
       query += " AND archived_at IS NULL";
     }
     if (team) { query += " AND team_name = ?"; qParams.push(team); }
-    query += " ORDER BY started_at DESC LIMIT ? OFFSET ?";
+    query += " ORDER BY COALESCE((SELECT MAX(timestamp) FROM events WHERE events.session_id = sessions.id), started_at) DESC LIMIT ? OFFSET ?";
     qParams.push(limit, offset);
     return jsonResponse(db.query(query).all(...qParams));
   }
