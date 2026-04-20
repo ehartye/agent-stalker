@@ -143,7 +143,7 @@ async function loadEvents() {
   const promises = ids.map(id => fetchJSON(`/api/events?limit=${EVENTS_PAGE_SIZE}&session=${id}`));
   const results = await Promise.all(promises);
   const allEvents = results.flat().filter(Boolean);
-  state.events = allEvents.sort((a, b) => a.timestamp - b.timestamp);
+  state.events = allEvents.sort((a, b) => b.timestamp - a.timestamp);
   state.eventsFullyLoaded = allEvents.length < EVENTS_PAGE_SIZE * ids.length;
   if (state.events.length > 0) {
     state.lastTimestamp = Math.max(...state.events.map(e => e.timestamp || 0));
@@ -171,14 +171,9 @@ async function loadMoreEvents() {
     if (deduped.length === 0) {
       state.eventsFullyLoaded = true;
     } else {
-      const scroll = document.getElementById('activityScroll');
-      const prevHeight = scroll ? scroll.scrollHeight : 0;
-      const prevTop = scroll ? scroll.scrollTop : 0;
-      state.events = state.events.concat(deduped).sort((a, b) => a.timestamp - b.timestamp);
+      state.events = state.events.concat(deduped).sort((a, b) => b.timestamp - a.timestamp);
       renderChipBar();
       renderActivity();
-      const scrollAfter = document.getElementById('activityScroll');
-      if (scrollAfter) scrollAfter.scrollTop = prevTop + (scrollAfter.scrollHeight - prevHeight);
     }
   }
   state.loadingMore = false;
@@ -210,7 +205,7 @@ async function pollNewEvents() {
   const results = await Promise.all(promises);
   const newEvents = results.flat().filter(Boolean);
   if (newEvents.length > 0) {
-    state.events = state.events.concat(newEvents).sort((a, b) => a.timestamp - b.timestamp);
+    state.events = state.events.concat(newEvents).sort((a, b) => b.timestamp - a.timestamp);
     state.lastTimestamp = Math.max(...newEvents.map(e => e.timestamp || 0));
     renderActivity();
     loadStats();
@@ -689,7 +684,6 @@ function renderActivity() {
   const scroll = document.getElementById('activityScroll');
   const prevScrollTop = scroll ? scroll.scrollTop : 0;
   const prevScrollHeight = scroll ? scroll.scrollHeight : 0;
-  const wasAtBottom = scroll ? (scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 20) : true;
 
   panel.innerHTML = html;
 
@@ -710,13 +704,18 @@ function renderActivity() {
     link.addEventListener('click', (e) => { e.stopPropagation(); showEventModal(link.dataset.detailId); });
   });
 
-  // Restore scroll position: scroll to bottom only if was already at bottom in live mode
+  // Scroll position: pin to current content across re-renders.
+  // - Load-more: older events appended at bottom, viewport does not shift.
+  // - At top: stay at 0 so newly polled events are visible.
+  // - Otherwise: new events prepended at top; shift by height delta to keep current content in view.
   const scrollAfter = document.getElementById('activityScroll');
   if (scrollAfter) {
-    if (state.isLive && wasAtBottom && !state.loadingMore) {
-      scrollAfter.scrollTop = scrollAfter.scrollHeight;
-    } else {
+    if (state.loadingMore) {
       scrollAfter.scrollTop = prevScrollTop;
+    } else if (prevScrollTop === 0) {
+      scrollAfter.scrollTop = 0;
+    } else {
+      scrollAfter.scrollTop = prevScrollTop + (scrollAfter.scrollHeight - prevScrollHeight);
     }
     scrollAfter.addEventListener('scroll', onActivityScroll);
   }
@@ -725,7 +724,8 @@ function renderActivity() {
 function onActivityScroll() {
   const scroll = document.getElementById('activityScroll');
   if (!scroll) return;
-  if (scroll.scrollTop < 100 && !state.eventsFullyLoaded && !state.loadingMore) {
+  const distanceFromBottom = scroll.scrollHeight - (scroll.scrollTop + scroll.clientHeight);
+  if (distanceFromBottom < 100 && !state.eventsFullyLoaded && !state.loadingMore) {
     loadMoreEvents();
   }
 }
