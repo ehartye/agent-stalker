@@ -150,12 +150,22 @@ function handleApi(url: URL, method: string): Response {
   }
 
   if (path === "/api/stats") {
+    const sessionParam = params.get("session");
+    const sessionIds = sessionParam ? sessionParam.split(",").filter(Boolean) : [];
+    if (sessionIds.length > 0) {
+      const placeholders = sessionIds.map(() => "?").join(",");
+      const events = db.query(`SELECT COUNT(*) as count FROM events WHERE session_id IN (${placeholders})`).get(...sessionIds) as { count: number };
+      const tools = db.query(`SELECT COUNT(DISTINCT tool_name) as count FROM events WHERE tool_name IS NOT NULL AND session_id IN (${placeholders})`).get(...sessionIds) as { count: number };
+      const agents = db.query(`SELECT COUNT(*) as count FROM agents WHERE session_id IN (${placeholders})`).get(...sessionIds) as { count: number };
+      const tasks = db.query(`SELECT COUNT(*) as count FROM tasks WHERE session_id IN (${placeholders})`).get(...sessionIds) as { count: number };
+      return jsonResponse({ sessions: sessionIds.length, events: events.count, tools: tools.count, agents: agents.count, tasks: tasks.count, scoped: true });
+    }
     const sessions = db.query("SELECT COUNT(*) as count FROM sessions").get() as { count: number };
     const events = db.query("SELECT COUNT(*) as count FROM events").get() as { count: number };
     const tools = db.query("SELECT COUNT(DISTINCT tool_name) as count FROM events WHERE tool_name IS NOT NULL").get() as { count: number };
     const agents = db.query("SELECT COUNT(*) as count FROM agents").get() as { count: number };
     const tasks = db.query("SELECT COUNT(*) as count FROM tasks").get() as { count: number };
-    return jsonResponse({ sessions: sessions.count, events: events.count, tools: tools.count, agents: agents.count, tasks: tasks.count });
+    return jsonResponse({ sessions: sessions.count, events: events.count, tools: tools.count, agents: agents.count, tasks: tasks.count, scoped: false });
   }
 
   if (path === "/api/tools") {

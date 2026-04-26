@@ -4,7 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>agent-stalker</title>
-<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/header.css">
+<link rel="stylesheet" href="/css/session-picker.css">
+<link rel="stylesheet" href="/css/chip-bar.css">
+<link rel="stylesheet" href="/css/kanban.css">
+<link rel="stylesheet" href="/css/activity.css">
+<link rel="stylesheet" href="/css/modal.css">
 </head>
 <body>
 <div id="app">
@@ -75,6 +81,7 @@
           <button class="modal-nav-btn" id="modalPrev" title="Previous">&#8592;</button>
           <button class="modal-nav-btn" id="modalNext" title="Next">&#8594;</button>
         </div>
+        <button class="modal-copy-btn" id="modalCopy" title="Copy details to clipboard">Copy</button>
         <button class="modal-close" id="modalClose">&times;</button>
       </div>
       <div class="modal-body" id="modalBody"></div>
@@ -82,6 +89,6 @@
   </div>
 </div>
 
-<script src="/app.js"></script>
+<script type="module" src="/js/main.js"></script>
 </body>
 </html>

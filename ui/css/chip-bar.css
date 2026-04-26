@@ -1,0 +1,99 @@
+/* Chip Bar (filters above content area) */
+.chip-bar {
+  grid-area: chipbar;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px 8px;
+  padding: 6px 16px;
+  background: rgba(12, 15, 21, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  max-height: 30vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  z-index: 10;
+  flex-wrap: wrap;
+}
+.chip-bar::-webkit-scrollbar { width: 3px; }
+.chip-bar::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+
+.chip-bar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 30%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.chip-bar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.chip-bar-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.agent-chip, .tool-chip, .event-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.agent-chip:hover, .tool-chip:hover, .event-chip:hover { border-color: var(--border-bright); color: var(--text-primary); }
+.agent-chip.active { border-color: var(--accent-green); color: var(--accent-green); background: var(--accent-green-dim); }
+.tool-chip.active { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+.event-chip.active { border-color: var(--accent-cyan); color: var(--accent-cyan); background: var(--accent-cyan-dim); }
+
+.agent-chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chip-bar-empty {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.chip-clear {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.chip-clear:hover { border-color: var(--accent-red); color: var(--accent-red); }

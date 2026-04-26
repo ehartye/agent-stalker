@@ -1,0 +1,115 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Martian+Mono:wght@300;400;500;600;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep: #07090d;
+  --bg-base: #0c0f15;
+  --bg-panel: #12161e;
+  --bg-card: #181d28;
+  --bg-hover: #1e2433;
+  --bg-active: #242a38;
+  --border: #1c2132;
+  --border-bright: #2a3148;
+  --text-primary: #e2e4ea;
+  --text-secondary: #7c829a;
+  --text-dim: #4a4f64;
+  --amber: #d4943a;
+  --amber-light: #e8b86a;
+  --amber-dim: rgba(212, 148, 58, 0.12);
+  --amber-glow: rgba(212, 148, 58, 0.25);
+  --accent-green: #34d399;
+  --accent-green-dim: rgba(52, 211, 153, 0.12);
+  --accent-amber: #d4943a;
+  --accent-amber-dim: rgba(212, 148, 58, 0.12);
+  --accent-blue: #60a5fa;
+  --accent-blue-dim: rgba(96, 165, 250, 0.12);
+  --accent-red: #f87171;
+  --accent-red-dim: rgba(248, 113, 113, 0.12);
+  --accent-purple: #a78bfa;
+  --accent-purple-dim: rgba(167, 139, 250, 0.12);
+  --accent-cyan: #22d3ee;
+  --accent-cyan-dim: rgba(34, 211, 238, 0.12);
+  --accent-pink: #f472b6;
+  --accent-pink-dim: rgba(244, 114, 182, 0.12);
+  --font-mono: 'Martian Mono', monospace;
+  --font-body: 'DM Sans', sans-serif;
+  --font-display: 'Chakra Petch', sans-serif;
+  --radius: 8px;
+  --radius-sm: 5px;
+  --glow-green: 0 0 20px rgba(52, 211, 153, 0.15);
+  --glow-amber: 0 0 20px rgba(212, 148, 58, 0.25);
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* Grid dot pattern overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--text-dim) 0.5px, transparent 0.5px);
+  background-size: 24px 24px;
+  opacity: 0.15;
+}
+
+/* Noise overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.015;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px;
+  z-index: 1000;
+}
+
+/* Layout */
+#app {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 60px auto 1fr 40px;
+  grid-template-areas:
+    "header"
+    "chipbar"
+    "content"
+    "footer";
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* Content area (split panes) */
+.content {
+  grid-area: content;
+  display: grid;
+  grid-template-columns: 38fr 62fr;
+  gap: 1px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.content-panel {
+  background: var(--bg-base);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom scrollbar (Chewie-style thin) */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
