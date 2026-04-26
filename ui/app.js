@@ -49,7 +49,9 @@ function syntaxHighlight(json) {
 }
 
 function sessionLabel(s) {
-  return s.cwd ? s.cwd.split('/').pop() || s.id.slice(0, 12) : s.id.slice(0, 12);
+  if (!s.cwd) return s.id.slice(0, 12);
+  const parts = s.cwd.split(/[\\/]/).filter(Boolean);
+  return parts.pop() || s.id.slice(0, 12);
 }
 
 function sessionLastEvent(s) {
@@ -220,7 +222,7 @@ function renderSessionDropdown() {
   if (count === 0) label.textContent = 'No sessions selected';
   else if (count === 1) {
     const s = [...state.activeSessions, ...state.archivedSessions].find(s => s.id === [...state.selectedSessionIds][0]);
-    label.textContent = s ? (s.cwd || '').split('/').pop() || s.id : '1 session';
+    label.textContent = s ? sessionLabel(s) : '1 session';
   } else {
     label.textContent = `${count} sessions`;
   }
@@ -246,7 +248,8 @@ function renderSessionList(listId, sessions, countId, isArchived) {
       <span class="dot" style="background:${isActive ? 'var(--accent-green)' : 'var(--text-dim)'};width:6px;height:6px;border-radius:50%;flex-shrink:0"></span>
       <div class="session-row-info">
         <div class="session-row-label" title="${esc(s.id)}">${esc(sessionLabel(s))}</div>
-        <div class="session-row-subtitle">${esc(sessionLastEvent(s))}</div>
+        <div class="session-row-subtitle session-row-path" title="${esc(s.cwd || '')}">${esc(s.cwd || '(no path)')}</div>
+        <div class="session-row-subtitle">${esc(sessionLastEvent(s) || '?')} &middot; ${esc(s.id.slice(0, 8))}</div>
       </div>
       <div class="session-row-actions">${actionBtn}</div>
     </div>`;
@@ -460,7 +463,25 @@ function renderKanban() {
   if (kanbanKey === _lastKanbanKey) return;
   _lastKanbanKey = kanbanKey;
 
-  const pending = allTasks.filter(t => t.status === 'pending');
+  // Per-session map of task_id -> status, used to derive whether a task's blockers are still active
+  const statusBySession = new Map();
+  allTasks.forEach(t => {
+    let m = statusBySession.get(t.session_id);
+    if (!m) { m = new Map(); statusBySession.set(t.session_id, m); }
+    m.set(String(t.id), t.status);
+  });
+  function hasActiveBlocker(t) {
+    if (!t.blocked_by || t.blocked_by === '[]' || t.blocked_by === 'null') return false;
+    let ids;
+    try { ids = JSON.parse(t.blocked_by); } catch { return false; }
+    if (!Array.isArray(ids) || ids.length === 0) return false;
+    const sessionMap = statusBySession.get(t.session_id);
+    // Unknown blockers (not in our task set) are treated as still blocking
+    return ids.some(id => (sessionMap?.get(String(id)) ?? 'pending') !== 'completed');
+  }
+
+  // status='blocked' is folded into Pending; the Blocked badge surfaces it visually
+  const pending = allTasks.filter(t => t.status === 'pending' || t.status === 'blocked');
   const inProgress = allTasks.filter(t => t.status === 'in_progress');
   const completed = allTasks.filter(t => t.status === 'completed');
 
@@ -468,7 +489,7 @@ function renderKanban() {
     const cards = tasks.length === 0
       ? '<div class="kanban-empty">No tasks</div>'
       : tasks.map(t => {
-          const hasBlocker = t.blocked_by && t.blocked_by !== '[]' && t.blocked_by !== 'null';
+          const hasBlocker = t.status === 'blocked' || hasActiveBlocker(t);
           const ownerDisplay = t.owner || 'Claude';
           const ownerColor = t.owner ? agentColor(t.owner) : agentColor('__top_level__');
           const ts = t.updated_at || t.created_at;
@@ -476,11 +497,11 @@ function renderKanban() {
             <div class="kanban-card-header">
               <span class="kanban-card-id">#${esc(t.id)}</span>
               ${hasBlocker ? '<span class="kanban-card-blocked">Blocked</span>' : ''}
+              <span class="kanban-card-time">${ts ? formatTime(ts) : ''}</span>
             </div>
             <div class="kanban-card-subject">${esc(t.subject || '(untitled)')}</div>
             <div class="kanban-card-footer">
-              <span class="kanban-card-owner"><span class="dot" style="background:${ownerColor}"></span>${esc(ownerDisplay)}</span>
-              <span class="kanban-card-time">${ts ? formatTime(ts) : ''}</span>
+              <span class="kanban-card-owner" style="color:${ownerColor};border-color:${ownerColor}33;background:${ownerColor}14"><span class="dot" style="background:${ownerColor}"></span>${esc(ownerDisplay)}</span>
             </div>
           </div>`;
         }).join('');
@@ -517,6 +538,15 @@ function getEventSummary(event) {
   if (!event.data) return '';
   try {
     const d = JSON.parse(event.data);
+    if (event.tool_name === 'SendMessage') {
+      const to = d.tool_input?.to;
+      const summary = d.tool_input?.summary;
+      if (to && summary) return `→ ${to}: ${summary}`;
+      if (summary) return summary;
+      if (to) return `→ ${to}`;
+    }
+    if (event.tool_name === 'Skill' && d.tool_input?.skill) return d.tool_input.skill;
+    if (d.prompt) return String(d.prompt).replace(/\s+/g, ' ').trim();
     if (d.tool_input?.command) return d.tool_input.command.slice(0, 80);
     if (d.tool_input?.file_path) return d.tool_input.file_path;
     if (d.tool_input?.pattern) return d.tool_input.pattern;
@@ -620,9 +650,11 @@ function renderActivity() {
         <div class="tool-card-header" data-toggle-group="${gi}">
           <span class="tool-card-tool">${esc(toolName)}</span>
           <span class="tool-card-summary" title="${esc(summary)}">${esc(summary) || '&mdash;'}</span>
-          ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
-          <span class="tool-card-time">${formatTime(rep.timestamp)}</span>
-          <span class="tool-card-status" style="color:${statusColor}">${statusIcon}</span>
+          <span class="activity-meta">
+            <span class="agent-slot">${agentName ? `<span class="tool-card-agent" style="color:${aColor};border-color:${aColor}33;background:${aColor}14"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}</span>
+            <span class="tool-card-time">${formatTime(rep.timestamp)}</span>
+            <span class="tool-card-status" style="color:${statusColor}">${statusIcon}</span>
+          </span>
         </div>
         <div class="tool-card-body">
           ${inputSummary ? `<div class="tool-card-section"><div class="tool-card-section-label">Input</div><div class="tool-card-section-value">${esc(inputSummary)}</div></div>` : ''}
@@ -649,9 +681,12 @@ function renderActivity() {
         html += `<div class="tool-card" style="border-left-color:${aColor}">
           <div class="tool-card-header" data-toggle-group="${gi}">
             <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
-            <span class="tool-card-summary">${esc(getEventSummary(e))}</span>
-            ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
-            <span class="tool-card-time">${formatTime(e.timestamp)}</span>
+            <span class="tool-card-summary" title="${esc(getEventSummary(e))}">${esc(getEventSummary(e))}</span>
+            <span class="activity-meta">
+              <span class="agent-slot">${agentName ? `<span class="tool-card-agent" style="color:${aColor};border-color:${aColor}33;background:${aColor}14"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}</span>
+              <span class="tool-card-time">${formatTime(e.timestamp)}</span>
+              <span class="tool-card-status"></span>
+            </span>
           </div>
           <div class="tool-card-body">
             <div class="tool-card-section"><div class="tool-card-section-label">Data</div><div class="tool-card-section-value">${esc(dataSummary)}</div></div>
@@ -662,8 +697,11 @@ function renderActivity() {
         html += `<div class="standalone-event">
           <span class="event-type" data-type="${esc(e.hook_event_name)}">${esc(e.hook_event_name)}</span>
           <span style="flex:1"></span>
-          ${agentName ? `<span class="tool-card-agent"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}
-          <span class="tool-card-time">${formatTime(e.timestamp)}</span>
+          <span class="activity-meta">
+            <span class="agent-slot">${agentName ? `<span class="tool-card-agent" style="color:${aColor};border-color:${aColor}33;background:${aColor}14"><span class="dot" style="background:${aColor}"></span>${esc(agentName)}</span>` : ''}</span>
+            <span class="tool-card-time">${formatTime(e.timestamp)}</span>
+            <span class="tool-card-status"></span>
+          </span>
         </div>`;
       }
     }
