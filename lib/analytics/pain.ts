@@ -1,7 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { ANALYTICS_CONFIG } from "./config";
 import { sessionErrorStats } from "./errors";
-import { fileChurn } from "./churn";
 import { errorRetryChains, taskBounces } from "./thrash";
 import { sessionEffort } from "./effort";
 
@@ -23,7 +22,6 @@ export function painLeaderboard(db: Database): PainEntry[] {
   const effort = sessionEffort(db);
   const chains = errorRetryChains(db);
   const bounces = taskBounces(db);
-  const churn = fileChurn(db);
 
   // sessions = union of all session ids seen
   const sessionIds = new Set<string>();
