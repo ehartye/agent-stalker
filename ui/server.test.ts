@@ -174,4 +174,13 @@ describe("semantic endpoints", () => {
     const body = await res.json();
     expect(body[0].label).toBe("negative");
   });
+
+  it("GET /api/insights/semantic/triage returns triage rows", async () => {
+    const db = getDb();
+    db.run("INSERT INTO semantic_session_triage (session_id, pain_score, summary, root_cause, created_at) VALUES ('s1', 5, 'rough', 'perms', 1)");
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/semantic/triage"), "GET");
+    const body = await res.json();
+    expect(body[0].root_cause).toBe("perms");
+  });
 });

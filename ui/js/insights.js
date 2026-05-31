@@ -39,7 +39,7 @@ export async function renderInsights() {
     ${renderSentiment(sentiment)}
     ${renderPivots(pivots)}
   `;
-  wireSemanticButton();
+  wireInsightsButtons();
 }
 
 function bar(frac) {
@@ -57,6 +57,7 @@ function renderPain(pain) {
       <td>${bar(p.breakdown.churn)} churn</td>
       <td>${bar(p.breakdown.thrash)} thrash</td>
       <td>${bar(p.breakdown.effort)} effort</td>
+      <td><button class="insights-btn triage-btn" data-session="${esc(p.session_id)}">Triage</button></td>
     </tr>`).join('');
   return section('Pain leaderboard',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th colspan="4">Breakdown</th></tr></thead><tbody>${rows}</tbody></table>`);
@@ -147,14 +148,27 @@ function renderPivots(rows) {
     `<table class="insights-table"><thead><tr><th>Session</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>${body}</tbody></table>`);
 }
 
-function wireSemanticButton() {
+function wireInsightsButtons() {
   const btn = document.getElementById('enableSemanticBtn');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    const out = document.getElementById('semanticStatusOut');
-    out.textContent = 'Starting semantic batch…';
-    const res = await fetch(API + '/api/insights/semantic/run', { method: 'POST' });
-    const body = await res.json().catch(() => ({}));
-    out.textContent = body.message || (res.ok ? 'Started.' : 'Failed to start.');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      const out = document.getElementById('semanticStatusOut');
+      out.textContent = 'Starting semantic batch…';
+      const res = await fetch(API + '/api/insights/semantic/run', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      out.textContent = body.message || (res.ok ? 'Started.' : 'Failed to start.');
+    });
+  }
+
+  document.querySelectorAll('.triage-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const session = btn.dataset.session;
+      btn.textContent = 'Triaging…';
+      const res = await fetch(API + '/api/insights/semantic/triage?session=' + encodeURIComponent(session), { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      btn.textContent = body.ok && body.result
+        ? `pain ${body.result.pain_score}: ${body.result.root_cause}`
+        : (body.message || 'failed');
+    });
   });
 }

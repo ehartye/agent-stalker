@@ -220,6 +220,9 @@ function handleApi(url: URL, method: string): Response {
   if (path === "/api/insights/semantic/pivots") {
     return jsonResponse(db.query("SELECT * FROM semantic_pivot_signals ORDER BY confidence DESC LIMIT 200").all());
   }
+  if (path === "/api/insights/semantic/triage") {
+    return jsonResponse(db.query("SELECT * FROM semantic_session_triage ORDER BY pain_score DESC").all());
+  }
 
   return jsonResponse({ error: "Not found" }, 404);
 }
@@ -258,6 +261,33 @@ async function runSemanticBatch(): Promise<Response> {
   return jsonResponse({ ok: true, message: "Semantic batch started. Refresh in a minute to see results." });
 }
 
+async function runTriage(sessionId: string): Promise<Response> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return jsonResponse({ ok: false, message: "Set ANTHROPIC_API_KEY to enable triage." }, 200);
+  }
+  const analysisDir = resolve(join(import.meta.dir, "..", "analysis"));
+  return await new Promise<Response>((res) => {
+    let p;
+    try {
+      p = spawn(pythonCmd(), ["-m", "agent_stalker_analysis", "triage", "--session", sessionId], { cwd: analysisDir, env: { ...process.env } });
+    } catch {
+      // spawn can throw synchronously (e.g. AGENT_STALKER_PYTHON points at a
+      // non-executable). Surface a clean message rather than rejecting → 500.
+      res(jsonResponse({ ok: false, message: "python not available" }, 200));
+      return;
+    }
+    let out = "";
+    p.stdout.on("data", (d) => (out += d));
+    // Covers spawn errors, a non-zero exit, or a Python traceback / partial
+    // output on stdout: any of these degrade to a clean { ok:false } message.
+    p.on("error", () => res(jsonResponse({ ok: false, message: "python not available" }, 200)));
+    p.on("close", () => {
+      try { res(jsonResponse({ ok: true, result: JSON.parse(out) })); }
+      catch { res(jsonResponse({ ok: false, message: "triage failed" }, 200)); }
+    });
+  });
+}
+
 if (import.meta.main) {
   const server = Bun.serve({
     port,
@@ -270,6 +300,12 @@ if (import.meta.main) {
 
       if (url.pathname === "/api/insights/semantic/run" && req.method === "POST") {
         return runSemanticBatch();
+      }
+
+      if (url.pathname === "/api/insights/semantic/triage" && req.method === "POST") {
+        const sessionId = url.searchParams.get("session");
+        if (!sessionId) return jsonResponse({ ok: false, message: "session required" }, 400);
+        return runTriage(sessionId);
       }
 
       if (url.pathname.startsWith("/api/")) {
