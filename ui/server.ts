@@ -1,6 +1,7 @@
 import { getDb, closeDb } from "../lib/db";
 import { join, resolve } from "path";
 import { existsSync } from "fs";
+import { spawn } from "child_process";
 import { painLeaderboard } from "../lib/analytics/pain";
 import { sessionErrorStats, errorsByTool } from "../lib/analytics/errors";
 import { fileChurn } from "../lib/analytics/churn";
@@ -202,6 +203,24 @@ function handleApi(url: URL, method: string): Response {
     return jsonResponse(rows);
   }
 
+  if (path === "/api/insights/semantic/status") {
+    const meta = db.query("SELECT feature, last_run_at, model, status, corpus_size FROM semantic_meta ORDER BY last_run_at DESC").all() as any[];
+    const lastRun = meta.length ? Math.max(...meta.map((m) => m.last_run_at ?? 0)) : null;
+    return jsonResponse({ available: meta.length > 0, lastRun, features: meta });
+  }
+  if (path === "/api/insights/semantic/sentiment") {
+    return jsonResponse(db.query("SELECT * FROM semantic_sentiment ORDER BY score ASC LIMIT 200").all());
+  }
+  if (path === "/api/insights/semantic/topics") {
+    return jsonResponse(db.query("SELECT * FROM semantic_topics ORDER BY pain_score DESC").all());
+  }
+  if (path === "/api/insights/semantic/errors") {
+    return jsonResponse(db.query("SELECT * FROM semantic_error_clusters ORDER BY size DESC").all());
+  }
+  if (path === "/api/insights/semantic/pivots") {
+    return jsonResponse(db.query("SELECT * FROM semantic_pivot_signals ORDER BY confidence DESC LIMIT 200").all());
+  }
+
   return jsonResponse({ error: "Not found" }, 404);
 }
 
@@ -210,11 +229,48 @@ export function handleApiForTest(url: URL, method: string): Response {
   return handleApi(url, method);
 }
 
+function pythonCmd(): string {
+  return process.env.AGENT_STALKER_PYTHON ?? "python";
+}
+
+async function runSemanticBatch(): Promise<Response> {
+  const analysisDir = resolve(join(import.meta.dir, "..", "analysis"));
+  // 1. dependency check
+  const check = await new Promise<{ ok: boolean; missing: string[] }>((res) => {
+    const p = spawn(pythonCmd(), ["-m", "agent_stalker_analysis", "check"], { cwd: analysisDir });
+    let out = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.on("error", () => res({ ok: false, missing: ["python"] }));
+    p.on("close", () => {
+      try { res(JSON.parse(out)); } catch { res({ ok: false, missing: ["python"] }); }
+    });
+  });
+  if (!check.ok) {
+    return jsonResponse({
+      ok: false,
+      message: `Missing: ${check.missing.join(", ")}. Install with: pip install -r analysis/requirements.txt`,
+    }, 200);
+  }
+  // 2. fire-and-forget the batch (results land in semantic_* tables)
+  const env = { ...process.env };
+  const p = spawn(pythonCmd(), ["-m", "agent_stalker_analysis", "run"], { cwd: analysisDir, env, detached: true, stdio: "ignore" });
+  p.unref();
+  return jsonResponse({ ok: true, message: "Semantic batch started. Refresh in a minute to see results." });
+}
+
 if (import.meta.main) {
   const server = Bun.serve({
     port,
+    // The semantic /run route awaits a Python dependency check that imports
+    // heavy ML modules (can take >10s cold). Raise the default 10s idleTimeout
+    // so the POST response isn't cut off before runSemanticBatch resolves.
+    idleTimeout: 30,
     async fetch(req) {
       const url = new URL(req.url);
+
+      if (url.pathname === "/api/insights/semantic/run" && req.method === "POST") {
+        return runSemanticBatch();
+      }
 
       if (url.pathname.startsWith("/api/")) {
         return handleApi(url, req.method);

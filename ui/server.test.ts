@@ -146,3 +146,32 @@ describe("insights endpoints", () => {
     expect(row.output_tokens).toBe(40);
   });
 });
+
+describe("semantic endpoints", () => {
+  const testDbPath = join(tmpdir(), `as-server-sem-${Date.now()}.db`);
+  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  afterEach(() => {
+    closeDb();
+    for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }
+    delete process.env.AGENT_STALKER_DB_PATH;
+  });
+
+  it("GET /api/insights/semantic/status reports availability from semantic_meta", async () => {
+    const db = getDb();
+    db.run("INSERT INTO semantic_meta (feature, last_run_at, status) VALUES ('sentiment', 123, 'ok')");
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/semantic/status"), "GET");
+    const body = await res.json();
+    expect(body.available).toBe(true);
+    expect(body.lastRun).toBe(123);
+  });
+
+  it("GET /api/insights/semantic/sentiment returns rows", async () => {
+    const db = getDb();
+    db.run("INSERT INTO semantic_sentiment (source_kind, session_id, score, label) VALUES ('prompt','s1',-0.8,'negative')");
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/semantic/sentiment"), "GET");
+    const body = await res.json();
+    expect(body[0].label).toBe("negative");
+  });
+});
