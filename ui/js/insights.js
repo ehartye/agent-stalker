@@ -19,6 +19,14 @@ export async function renderInsights() {
     fetchJSON('/api/insights/semantic/status'),
   ]);
 
+  const semanticData = semantic && semantic.available ? await Promise.all([
+    fetchJSON('/api/insights/semantic/sentiment'),
+    fetchJSON('/api/insights/semantic/topics'),
+    fetchJSON('/api/insights/semantic/errors'),
+    fetchJSON('/api/insights/semantic/pivots'),
+  ]) : [null, null, null, null];
+  const [sentiment, topics, errClusters, pivots] = semanticData;
+
   panel.innerHTML = `
     ${renderPain(pain)}
     ${renderTokens(tokens)}
@@ -26,6 +34,10 @@ export async function renderInsights() {
     ${renderErrors(errors)}
     ${renderThrash(thrash)}
     ${renderSemanticSection(semantic)}
+    ${renderTopics(topics)}
+    ${renderErrorClusters(errClusters)}
+    ${renderSentiment(sentiment)}
+    ${renderPivots(pivots)}
   `;
   wireSemanticButton();
 }
@@ -101,6 +113,38 @@ function renderSemanticSection(status) {
     `<p>Last computed: ${status.lastRun ? new Date(status.lastRun).toLocaleString() : 'never'}.</p>
      <button id="enableSemanticBtn" class="insights-btn">Recompute</button>
      <pre id="semanticStatusOut" class="semantic-status"></pre>`);
+}
+
+function renderSentiment(rows) {
+  if (!rows || !rows.length) return '';
+  const neg = rows.filter(r => r.label === 'negative').slice(0, 15).map(r =>
+    `<tr><td class="mono">${esc((r.session_id||'').slice(0,8))}</td><td>${r.score.toFixed(2)}</td><td>${esc(r.source_kind)}</td></tr>`).join('');
+  return section('Frustration (most negative)',
+    `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th>Kind</th></tr></thead><tbody>${neg}</tbody></table>`);
+}
+
+function renderTopics(rows) {
+  if (!rows || !rows.length) return '';
+  const body = rows.slice(0, 20).map(t =>
+    `<tr><td>${esc(t.label)}</td><td>${esc(t.keywords || '')}</td><td>${t.size}</td><td>${(t.pain_score||0).toFixed(2)}</td></tr>`).join('');
+  return section('Topics (ranked by pain)',
+    `<table class="insights-table"><thead><tr><th>Topic</th><th>Keywords</th><th>Docs</th><th>Pain</th></tr></thead><tbody>${body}</tbody></table>`);
+}
+
+function renderErrorClusters(rows) {
+  if (!rows || !rows.length) return '';
+  const body = rows.slice(0, 20).map(c =>
+    `<tr><td>${esc(c.label)}</td><td>${c.size}</td><td>${c.session_spread}</td><td class="mono">${esc((c.exemplar||'').slice(0,60))}</td></tr>`).join('');
+  return section('Error clusters',
+    `<table class="insights-table"><thead><tr><th>Label</th><th>Count</th><th>Sessions</th><th>Exemplar</th></tr></thead><tbody>${body}</tbody></table>`);
+}
+
+function renderPivots(rows) {
+  if (!rows || !rows.length) return '';
+  const body = rows.slice(0, 15).map(p =>
+    `<tr><td class="mono">${esc((p.session_id||'').slice(0,8))}</td><td>${(p.confidence||0).toFixed(2)}</td><td>${esc(p.evidence||'')}</td></tr>`).join('');
+  return section('Agent pivots (semantic)',
+    `<table class="insights-table"><thead><tr><th>Session</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>${body}</tbody></table>`);
 }
 
 function wireSemanticButton() {
