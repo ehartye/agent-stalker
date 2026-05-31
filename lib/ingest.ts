@@ -56,6 +56,10 @@ function handleSessionEnd(event: Record<string, any>): void {
   const db = getDb();
   db.run("UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ?", [Date.now(), event.reason, event.session_id]);
   recordEvent(event, { reason: event.reason });
+  try {
+    const { ingestUsageForSession } = require("./usage/ingest-usage");
+    ingestUsageForSession(db, event.session_id);
+  } catch { /* usage ingest is best-effort */ }
 }
 
 function parseTaskIdFromResponse(response: any): string | null {
