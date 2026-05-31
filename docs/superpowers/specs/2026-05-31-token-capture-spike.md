@@ -53,7 +53,7 @@ object per line (JSONL). Observed against a real local transcript on 2026-05-31:
 | `message_uuid` (PK)             | line `uuid`                                                   |
 | `session_id`                    | our session id (the file is per-session; not the line's `sessionId`, which we already know from the row we read the path from) |
 | `agent_id`                      | the subagent's `agents.id` when reading a subagent transcript, else `null` |
-| `role`                          | line `type` (`assistant` / `user`), fallback `message.role`   |
+| `role`                          | line `type` (`assistant` / `user`), fallback `message.role`, else literal `"assistant"` |
 | `input_tokens`                  | `message.usage.input_tokens`                                  |
 | `cache_creation_input_tokens`   | `message.usage.cache_creation_input_tokens`                   |
 | `cache_read_input_tokens`       | `message.usage.cache_read_input_tokens`                       |
