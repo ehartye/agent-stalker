@@ -157,3 +157,9 @@
 .footer-spacer { flex: 1; }
 
 .footer-time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.view-toggle { display: inline-flex; gap: 2px; margin-right: 12px; }
+.view-btn { padding: 4px 10px; background: transparent; border: 1px solid rgba(255,255,255,.15); color: inherit; cursor: pointer; font-size: 12px; }
+.view-btn:first-child { border-radius: 6px 0 0 6px; }
+.view-btn:last-child { border-radius: 0 6px 6px 0; }
+.view-btn.active { background: rgba(255,255,255,.14); }

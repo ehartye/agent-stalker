@@ -7,6 +7,7 @@ import { renderChipBar } from './chip-bar.js';
 import { renderKanban } from './kanban.js';
 import { renderActivity } from './activity.js';
 import { closeModal, copyCurrentEvent, modalPrev, modalNext } from './modal.js';
+import { renderInsights } from './insights.js';
 
 // Modal handlers
 document.getElementById('modalClose').addEventListener('click', closeModal);
@@ -29,6 +30,19 @@ document.getElementById('liveToggle').addEventListener('click', () => {
   document.getElementById('liveToggle').classList.toggle('paused', !state.isLive);
   document.getElementById('liveLabel').textContent = state.isLive ? 'LIVE' : 'PAUSED';
 });
+
+// View toggle (Activity <-> Insights)
+function setView(view) {
+  const isInsights = view === 'insights';
+  document.getElementById('kanbanPanel').style.display = isInsights ? 'none' : '';
+  document.getElementById('activityPanel').style.display = isInsights ? 'none' : '';
+  document.getElementById('insightsPanel').style.display = isInsights ? '' : 'none';
+  document.getElementById('viewActivityBtn').classList.toggle('active', !isInsights);
+  document.getElementById('viewInsightsBtn').classList.toggle('active', isInsights);
+  if (isInsights) renderInsights();
+}
+document.getElementById('viewActivityBtn').addEventListener('click', () => setView('activity'));
+document.getElementById('viewInsightsBtn').addEventListener('click', () => setView('insights'));
 
 // Session dropdown
 document.getElementById('sessionDropdownTrigger').addEventListener('click', () => {

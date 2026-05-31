@@ -1,0 +1,15 @@
+#insightsPanel { padding: 16px; overflow-y: auto; }
+.insights-section { margin-bottom: 24px; }
+.insights-section h3 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; opacity: .8; }
+.insights-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.insights-table th, .insights-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.insights-table .mono { font-family: ui-monospace, monospace; }
+.insights-cols { display: flex; gap: 24px; }
+.insights-cols > div { flex: 1; }
+.pain-bar { display: inline-block; width: 60px; height: 8px; background: rgba(255,255,255,.1); border-radius: 4px; vertical-align: middle; overflow: hidden; }
+.pain-bar-fill { display: block; height: 100%; background: #e0567a; }
+.insights-btn { padding: 6px 12px; border: 1px solid rgba(255,255,255,.2); background: transparent; color: inherit; border-radius: 6px; cursor: pointer; }
+.insights-btn:hover { background: rgba(255,255,255,.08); }
+.semantic-status { margin-top: 8px; font-size: 12px; opacity: .8; white-space: pre-wrap; }
+.empty { opacity: .6; font-size: 13px; }
+.insights-loading { padding: 24px; opacity: .6; }

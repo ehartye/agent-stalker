@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/css/kanban.css">
 <link rel="stylesheet" href="/css/activity.css">
 <link rel="stylesheet" href="/css/modal.css">
+<link rel="stylesheet" href="/css/insights.css">
 </head>
 <body>
 <div id="app">
@@ -47,6 +48,10 @@
       <input type="text" id="searchInput" placeholder="Search events..." autocomplete="off">
     </div>
     <div class="header-controls">
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-btn active" data-view="activity" id="viewActivityBtn">Activity</button>
+        <button class="view-btn" data-view="insights" id="viewInsightsBtn">Insights</button>
+      </div>
       <div class="live-indicator" id="liveToggle" title="Toggle auto-refresh">
         <span class="live-dot"></span>
         <span id="liveLabel">LIVE</span>
@@ -61,6 +66,7 @@
   <div class="content">
     <div class="content-panel" id="kanbanPanel"></div>
     <div class="content-panel" id="activityPanel"></div>
+    <div class="content-panel" id="insightsPanel" style="display:none"></div>
   </div>
 
   <footer class="footer">
