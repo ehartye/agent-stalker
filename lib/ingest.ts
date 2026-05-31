@@ -40,13 +40,13 @@ function handleSessionStart(event: Record<string, any>): void {
   const existing = db.query("SELECT id FROM sessions WHERE id = ?").get(event.session_id);
   if (existing) {
     db.run(
-      "UPDATE sessions SET cwd = ?, permission_mode = ?, model = ?, agent_type = ?, started_at = ? WHERE id = ?",
-      [event.cwd, event.permission_mode, event.model ?? null, event.agent_type ?? null, Date.now(), event.session_id],
+      "UPDATE sessions SET cwd = ?, permission_mode = ?, model = ?, agent_type = ?, transcript_path = ?, started_at = ? WHERE id = ?",
+      [event.cwd, event.permission_mode, event.model ?? null, event.agent_type ?? null, event.transcript_path ?? null, Date.now(), event.session_id],
     );
   } else {
     db.run(
-      "INSERT INTO sessions (id, cwd, permission_mode, model, agent_type, started_at) VALUES (?, ?, ?, ?, ?, ?)",
-      [event.session_id, event.cwd, event.permission_mode, event.model ?? null, event.agent_type ?? null, Date.now()],
+      "INSERT INTO sessions (id, cwd, permission_mode, model, agent_type, transcript_path, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [event.session_id, event.cwd, event.permission_mode, event.model ?? null, event.agent_type ?? null, event.transcript_path ?? null, Date.now()],
     );
   }
   recordEvent(event, { source: event.source });

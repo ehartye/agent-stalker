@@ -345,3 +345,45 @@ describe("ingestEvent", () => {
     });
   });
 });
+
+describe("ingest capture additions", () => {
+  const testDbPath = join(tmpdir(), `agent-stalker-ingest-cap-${Date.now()}.db`);
+
+  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  afterEach(() => {
+    closeDb();
+    try { unlinkSync(testDbPath); } catch {}
+    try { unlinkSync(testDbPath + "-wal"); } catch {}
+    try { unlinkSync(testDbPath + "-shm"); } catch {}
+    delete process.env.AGENT_STALKER_DB_PATH;
+  });
+
+  it("stores transcript_path on the session at SessionStart", () => {
+    ingestEvent({
+      hook_event_name: "SessionStart",
+      session_id: "s1",
+      cwd: "/repo",
+      permission_mode: "default",
+      transcript_path: "/home/u/.claude/projects/p/s1.jsonl",
+      source: "startup",
+    });
+    const db = getDb();
+    const row = db.query("SELECT transcript_path FROM sessions WHERE id = ?").get("s1") as any;
+    expect(row.transcript_path).toBe("/home/u/.claude/projects/p/s1.jsonl");
+  });
+
+  it("keeps user prompts untruncated", () => {
+    const longPrompt = "x".repeat(5000);
+    ingestEvent({
+      hook_event_name: "UserPromptSubmit",
+      session_id: "s2",
+      cwd: "/repo",
+      prompt: longPrompt,
+    });
+    const db = getDb();
+    const row = db.query("SELECT data FROM events WHERE session_id = ? AND hook_event_name = 'UserPromptSubmit'").get("s2") as any;
+    const data = JSON.parse(row.data);
+    expect(data.prompt).toBe(longPrompt);
+    expect(data.prompt.length).toBe(5000);
+  });
+});
