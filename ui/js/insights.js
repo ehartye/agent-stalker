@@ -10,8 +10,9 @@ export async function renderInsights() {
   if (!panel) return;
   panel.innerHTML = '<div class="insights-loading">Loading insights…</div>';
 
-  const [pain, errors, churn, thrash, semantic] = await Promise.all([
+  const [pain, tokens, errors, churn, thrash, semantic] = await Promise.all([
     fetchJSON('/api/insights/pain'),
+    fetchJSON('/api/insights/tokens'),
     fetchJSON('/api/insights/errors'),
     fetchJSON('/api/insights/churn'),
     fetchJSON('/api/insights/thrash'),
@@ -20,6 +21,7 @@ export async function renderInsights() {
 
   panel.innerHTML = `
     ${renderPain(pain)}
+    ${renderTokens(tokens)}
     ${renderChurn(churn)}
     ${renderErrors(errors)}
     ${renderThrash(thrash)}
@@ -46,6 +48,14 @@ function renderPain(pain) {
     </tr>`).join('');
   return section('Pain leaderboard',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th colspan="4">Breakdown</th></tr></thead><tbody>${rows}</tbody></table>`);
+}
+
+function renderTokens(tokens) {
+  if (!tokens || !tokens.length) return section('Token usage', '<p class="empty">Run usage ingest (SessionEnd or `bun run ingest-usage`) to populate.</p>');
+  const rows = tokens.slice(0, 20).map(t =>
+    `<tr><td class="mono">${esc(t.session_id.slice(0,8))}</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${t.cache_read_input_tokens}</td></tr>`).join('');
+  return section('Token usage',
+    `<table class="insights-table"><thead><tr><th>Session</th><th>Input</th><th>Output</th><th>Cache read</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
 
 function renderChurn(churn) {

@@ -189,6 +189,18 @@ function handleApi(url: URL, method: string): Response {
   if (path === "/api/insights/thrash") {
     return jsonResponse({ retryChains: errorRetryChains(db), taskBounces: taskBounces(db) });
   }
+  if (path === "/api/insights/tokens") {
+    const rows = db.query(
+      `SELECT session_id,
+              SUM(COALESCE(input_tokens,0)) AS input_tokens,
+              SUM(COALESCE(output_tokens,0)) AS output_tokens,
+              SUM(COALESCE(cache_creation_input_tokens,0)) AS cache_creation_input_tokens,
+              SUM(COALESCE(cache_read_input_tokens,0)) AS cache_read_input_tokens
+       FROM usage GROUP BY session_id
+       ORDER BY (SUM(COALESCE(input_tokens,0))+SUM(COALESCE(output_tokens,0))) DESC`,
+    ).all();
+    return jsonResponse(rows);
+  }
 
   return jsonResponse({ error: "Not found" }, 404);
 }

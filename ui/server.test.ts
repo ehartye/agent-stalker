@@ -3,6 +3,7 @@ import { getDb, closeDb } from "../lib/db";
 import { unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { seedSession, seedToolFailure, seedToolCall } from "../lib/analytics/test-helpers";
 
 describe("server API", () => {
   const testDbPath = join(tmpdir(), `agent-stalker-server-test-${Date.now()}.db`);
@@ -100,8 +101,6 @@ describe("server API", () => {
   });
 });
 
-import { seedSession, seedToolFailure, seedToolCall } from "../lib/analytics/test-helpers";
-
 describe("insights endpoints", () => {
   const testDbPath = join(tmpdir(), `as-server-insights-${Date.now()}.db`);
   beforeEach(() => {
@@ -132,5 +131,18 @@ describe("insights endpoints", () => {
     const body = await res.json();
     expect(body).toHaveProperty("bySession");
     expect(body).toHaveProperty("byTool");
+  });
+
+  it("GET /api/insights/tokens returns per-session token totals", async () => {
+    const db = getDb();
+    db.run("INSERT INTO sessions (id, started_at) VALUES ('st', 1)");
+    db.run(`INSERT INTO usage (message_uuid, session_id, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens)
+            VALUES ('m1','st',100,40,10,5)`);
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/tokens"), "GET");
+    const body = await res.json();
+    const row = body.find((r: any) => r.session_id === "st");
+    expect(row.input_tokens).toBe(100);
+    expect(row.output_tokens).toBe(40);
   });
 });
