@@ -176,6 +176,23 @@ function runMigrations(db: Database): void {
     db.run("ALTER TABLE tasks_v3 RENAME TO tasks");
     db.run("UPDATE schema_version SET version = 5");
   }
+
+  if (currentVersion < 6) {
+    db.run("ALTER TABLE sessions ADD COLUMN transcript_path TEXT");
+    db.run(`CREATE TABLE usage (
+      message_uuid TEXT PRIMARY KEY,
+      session_id TEXT,
+      agent_id TEXT,
+      role TEXT,
+      input_tokens INTEGER,
+      cache_creation_input_tokens INTEGER,
+      cache_read_input_tokens INTEGER,
+      output_tokens INTEGER,
+      timestamp INTEGER
+    )`);
+    db.run("CREATE INDEX idx_usage_session_id ON usage(session_id)");
+    db.run("UPDATE schema_version SET version = 6");
+  }
 }
 
 export function getDb(): Database {
