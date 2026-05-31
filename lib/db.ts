@@ -193,6 +193,37 @@ function runMigrations(db: Database): void {
     db.run("CREATE INDEX idx_usage_session_id ON usage(session_id)");
     db.run("UPDATE schema_version SET version = 6");
   }
+
+  if (currentVersion < 7) {
+    db.run(`CREATE TABLE semantic_meta (
+      feature TEXT PRIMARY KEY, version TEXT, model TEXT, last_run_at INTEGER, corpus_size INTEGER, status TEXT
+    )`);
+    db.run(`CREATE TABLE semantic_sentiment (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, source_kind TEXT, event_id INTEGER, session_id TEXT,
+      score REAL, label TEXT, timestamp INTEGER
+    )`);
+    db.run(`CREATE TABLE semantic_topics (
+      topic_id INTEGER PRIMARY KEY, label TEXT, keywords TEXT, size INTEGER, pain_score REAL
+    )`);
+    db.run(`CREATE TABLE semantic_topic_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, doc_id TEXT, session_id TEXT, topic_id INTEGER, prob REAL
+    )`);
+    db.run(`CREATE TABLE semantic_error_clusters (
+      cluster_id INTEGER PRIMARY KEY, label TEXT, exemplar TEXT, size INTEGER, session_spread INTEGER
+    )`);
+    db.run(`CREATE TABLE semantic_error_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, session_id TEXT, cluster_id INTEGER
+    )`);
+    db.run(`CREATE TABLE semantic_pivot_signals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, window_start INTEGER, window_end INTEGER,
+      confidence REAL, evidence TEXT
+    )`);
+    db.run(`CREATE TABLE semantic_session_triage (
+      session_id TEXT PRIMARY KEY, pain_score REAL, summary TEXT, root_cause TEXT,
+      model TEXT, cost_tokens INTEGER, created_at INTEGER
+    )`);
+    db.run("UPDATE schema_version SET version = 7");
+  }
 }
 
 export function getDb(): Database {

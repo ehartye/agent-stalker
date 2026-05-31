@@ -179,6 +179,24 @@ describe("db", () => {
     });
   });
 
+  describe("v7 migration", () => {
+    const semanticTables = [
+      "semantic_meta", "semantic_sentiment", "semantic_topics",
+      "semantic_topic_assignments", "semantic_error_clusters",
+      "semantic_error_assignments", "semantic_pivot_signals", "semantic_session_triage",
+    ];
+    it("creates all semantic_* tables (empty)", () => {
+      const db = getDb();
+      const names = (db.query("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map(t => t.name);
+      for (const t of semanticTables) expect(names).toContain(t);
+    });
+    it("schema_version is at least 7", () => {
+      const db = getDb();
+      const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
+      expect(row.version).toBeGreaterThanOrEqual(7);
+    });
+  });
+
   describe("v2 migration - data migration", () => {
     it("migrates existing v1 tasks data", () => {
       // Manually create a v1-only database, insert data, then run migration
