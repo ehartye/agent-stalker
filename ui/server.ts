@@ -1,6 +1,10 @@
 import { getDb, closeDb } from "../lib/db";
 import { join, resolve } from "path";
 import { existsSync } from "fs";
+import { painLeaderboard } from "../lib/analytics/pain";
+import { sessionErrorStats, errorsByTool } from "../lib/analytics/errors";
+import { fileChurn } from "../lib/analytics/churn";
+import { errorRetryChains, taskBounces } from "../lib/analytics/thrash";
 
 const port = parseInt(process.argv.find((_, i, a) => a[i - 1] === "--port") ?? "3141");
 
@@ -173,36 +177,56 @@ function handleApi(url: URL, method: string): Response {
     return jsonResponse(rows);
   }
 
+  if (path === "/api/insights/pain") {
+    return jsonResponse(painLeaderboard(db));
+  }
+  if (path === "/api/insights/errors") {
+    return jsonResponse({ bySession: sessionErrorStats(db), byTool: errorsByTool(db) });
+  }
+  if (path === "/api/insights/churn") {
+    return jsonResponse(fileChurn(db));
+  }
+  if (path === "/api/insights/thrash") {
+    return jsonResponse({ retryChains: errorRetryChains(db), taskBounces: taskBounces(db) });
+  }
+
   return jsonResponse({ error: "Not found" }, 404);
 }
 
-const server = Bun.serve({
-  port,
-  async fetch(req) {
-    const url = new URL(req.url);
+/** Test wrapper: invoke the API router without starting a server. */
+export function handleApiForTest(url: URL, method: string): Response {
+  return handleApi(url, method);
+}
 
-    if (url.pathname.startsWith("/api/")) {
-      return handleApi(url, req.method);
-    }
+if (import.meta.main) {
+  const server = Bun.serve({
+    port,
+    async fetch(req) {
+      const url = new URL(req.url);
 
-    // Serve static files from ui/ directory
-    const pluginRoot = import.meta.dir;
-    let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
-    const fullPath = resolve(join(pluginRoot, filePath));
+      if (url.pathname.startsWith("/api/")) {
+        return handleApi(url, req.method);
+      }
 
-    // Prevent path traversal outside the ui/ directory
-    if (fullPath.startsWith(pluginRoot) && existsSync(fullPath)) {
-      return new Response(Bun.file(fullPath));
-    }
+      // Serve static files from ui/ directory
+      const pluginRoot = import.meta.dir;
+      let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
+      const fullPath = resolve(join(pluginRoot, filePath));
 
-    // Fallback to index.html for SPA routing
-    return new Response(Bun.file(join(pluginRoot, "index.html")));
-  },
-});
+      // Prevent path traversal outside the ui/ directory
+      if (fullPath.startsWith(pluginRoot) && existsSync(fullPath)) {
+        return new Response(Bun.file(fullPath));
+      }
 
-console.log(`agent-stalker UI running at http://localhost:${server.port}`);
+      // Fallback to index.html for SPA routing
+      return new Response(Bun.file(join(pluginRoot, "index.html")));
+    },
+  });
 
-process.on("SIGINT", () => {
-  closeDb();
-  process.exit(0);
-});
+  console.log(`agent-stalker UI running at http://localhost:${server.port}`);
+
+  process.on("SIGINT", () => {
+    closeDb();
+    process.exit(0);
+  });
+}

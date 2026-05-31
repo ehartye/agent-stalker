@@ -99,3 +99,38 @@ describe("server API", () => {
     expect(rows.map(r => r.id)).toEqual(["sess-1", "sess-2", "sess-3"]);
   });
 });
+
+import { seedSession, seedToolFailure, seedToolCall } from "../lib/analytics/test-helpers";
+
+describe("insights endpoints", () => {
+  const testDbPath = join(tmpdir(), `as-server-insights-${Date.now()}.db`);
+  beforeEach(() => {
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+    seedSession("s1");
+    seedToolFailure("s1", "Edit", { file_path: "/a.ts" });
+    seedToolCall("s1", "Edit", { file_path: "/a.ts" });
+  });
+  afterEach(() => {
+    closeDb();
+    for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }
+    delete process.env.AGENT_STALKER_DB_PATH;
+  });
+
+  it("GET /api/insights/pain returns a ranked leaderboard", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/pain"), "GET");
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body[0]).toHaveProperty("session_id");
+    expect(body[0]).toHaveProperty("score");
+    expect(body[0]).toHaveProperty("breakdown");
+  });
+
+  it("GET /api/insights/errors returns per-session and per-tool stats", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/errors"), "GET");
+    const body = await res.json();
+    expect(body).toHaveProperty("bySession");
+    expect(body).toHaveProperty("byTool");
+  });
+});
