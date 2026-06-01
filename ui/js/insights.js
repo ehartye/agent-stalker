@@ -77,7 +77,7 @@ function renderPain(pain) {
     // colour-coded with a system accent.
     const n = p.normalized || p.breakdown;
     return `
-    <tr>
+    <tr class="is-drillable" data-drill="session" data-session="${esc(p.session_id)}">
       <td class="mono">${esc((p.session_id || '').slice(0, 8))}</td>
       <td><span class="pain-score">${p.score.toFixed(3)}</span></td>
       <td><span class="pain-cell">${bar(n.errorRate, '--accent-red')} err</span></td>
@@ -102,7 +102,7 @@ function renderTriage(rows) {
   const body = rows.slice(0, 20).map(t => {
     const analyzed = t.status === 'analyzed';
     const badge = analyzed ? `<span class="triage-badge done">analyzed</span>` : `<span class="triage-badge pending">flagged</span>`;
-    return `<tr>
+    return `<tr class="is-drillable" data-drill="session" data-session="${esc(t.session_id)}">
       <td class="mono">${esc((t.session_id || '').slice(0, 8))}</td>
       <td>${badge}</td>
       <td>${analyzed && t.pain_score != null ? esc(String(t.pain_score)) + '/5' : '—'}</td>
@@ -117,7 +117,7 @@ function renderTriage(rows) {
 function renderTokens(tokens) {
   if (!tokens || !tokens.length) return section('Token usage', '<p class="empty">Run usage ingest (SessionEnd or `bun run ingest-usage`) to populate.</p>');
   const rows = tokens.slice(0, 20).map(t =>
-    `<tr><td class="mono">${esc((t.session_id || '').slice(0,8))}</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${t.cache_read_input_tokens}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="session" data-session="${esc(t.session_id)}"><td class="mono">${esc((t.session_id || '').slice(0,8))}</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${t.cache_read_input_tokens}</td></tr>`).join('');
   return section('Token usage',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Input</th><th>Output</th><th>Cache read</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
@@ -125,15 +125,15 @@ function renderTokens(tokens) {
 function renderChurn(churn) {
   if (!churn || !churn.length) return section('File churn', '<p class="empty">No data yet.</p>');
   const rows = churn.slice(0, 20).map(c => `
-    <tr><td class="mono">${esc(c.file_path)}</td><td>${c.edits}</td><td>${c.sessions}</td><td>${Math.round(c.medianGapMs/1000)}s</td></tr>`).join('');
+    <tr class="is-drillable" data-drill="events" data-by="file" data-value="${esc(c.file_path)}" data-drill-title="${esc(c.file_path)}"><td class="mono">${esc(c.file_path)}</td><td>${c.edits}</td><td>${c.sessions}</td><td>${Math.round(c.medianGapMs/1000)}s</td></tr>`).join('');
   return section('File churn',
     `<table class="insights-table"><thead><tr><th>File</th><th>Edits</th><th>Sessions</th><th>Median gap</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
 
 function renderErrors(errors) {
   if (!errors) return section('Errors', '<p class="empty">No data yet.</p>');
-  const tool = (errors.byTool || []).slice(0, 10).map(t => `<tr><td>${esc(t.tool_name)}</td><td>${t.errors}</td></tr>`).join('');
-  const sess = (errors.bySession || []).slice(0, 10).map(s => `<tr><td class="mono">${esc((s.session_id || '').slice(0,8))}</td><td>${s.errors}</td><td>${(s.errorRate*100).toFixed(1)}%</td></tr>`).join('');
+  const tool = (errors.byTool || []).slice(0, 10).map(t => `<tr class="is-drillable" data-drill="events" data-by="tool" data-value="${esc(t.tool_name)}" data-errors-only="1" data-drill-title="${esc(t.tool_name)} errors"><td>${esc(t.tool_name)}</td><td>${t.errors}</td></tr>`).join('');
+  const sess = (errors.bySession || []).slice(0, 10).map(s => `<tr class="is-drillable" data-drill="session" data-session="${esc(s.session_id)}"><td class="mono">${esc((s.session_id || '').slice(0,8))}</td><td>${s.errors}</td><td>${(s.errorRate*100).toFixed(1)}%</td></tr>`).join('');
   return section('Errors',
     `<div class="insights-cols">
        <div><h4>By tool</h4><table class="insights-table"><thead><tr><th>Tool</th><th>Errors</th></tr></thead><tbody>${tool}</tbody></table></div>
@@ -144,9 +144,14 @@ function renderErrors(errors) {
 function renderThrash(thrash) {
   if (!thrash) return section('Thrash / pivot-loops', '<p class="empty">No data yet.</p>');
   const chains = (thrash.retryChains || []).slice(0, 15).map(c =>
-    `<tr><td class="mono">${esc(c.session_id.slice(0,8))}</td><td>${esc(c.tool_name)}</td><td class="mono">${esc(String(c.target).slice(0,40))}</td><td>${c.chainLength}</td></tr>`).join('');
-  return section('Thrash / pivot-loops',
-    `<table class="insights-table"><thead><tr><th>Session</th><th>Tool</th><th>Target</th><th>Retry depth</th></tr></thead><tbody>${chains}</tbody></table>`);
+    `<tr class="is-drillable" data-drill="events" data-by="retry" data-value="${esc(c.target)}" data-tool="${esc(c.tool_name)}" data-retry-session="${esc(c.session_id)}" data-drill-title="retry: ${esc(c.tool_name)}"><td class="mono">${esc((c.session_id||'').slice(0,8))}</td><td>${esc(c.tool_name)}</td><td class="mono">${esc(String(c.target).slice(0,40))}</td><td>${c.chainLength}</td></tr>`).join('');
+  const bounces = (thrash.taskBounces || []).slice(0, 15).map(b =>
+    `<tr class="is-drillable" data-drill="task" data-task="${esc(b.task_id)}" data-session="${esc(b.session_id)}"><td class="mono">${esc(b.task_id)}</td><td class="mono">${esc((b.session_id||'').slice(0,8))}</td><td>${b.bounces}</td></tr>`).join('');
+  const bouncesTable = bounces
+    ? `<div><h4>Task bounces</h4><table class="insights-table"><thead><tr><th>Task</th><th>Session</th><th>Bounces</th></tr></thead><tbody>${bounces}</tbody></table></div>`
+    : '';
+  const chainsTable = `<div><h4>Retry chains</h4><table class="insights-table"><thead><tr><th>Session</th><th>Tool</th><th>Target</th><th>Retry depth</th></tr></thead><tbody>${chains}</tbody></table></div>`;
+  return section('Thrash / pivot-loops', `<div class="insights-cols">${chainsTable}${bouncesTable}</div>`);
 }
 
 // Generic DOM sort: click a <th> to sort the table's rows by that column.
@@ -198,7 +203,7 @@ function renderSemanticSection(status) {
 function renderSentiment(rows) {
   if (!rows || !rows.length) return '';
   const neg = rows.filter(r => r.label === 'negative').slice(0, 15).map(r =>
-    `<tr><td class="mono">${esc((r.session_id||'').slice(0,8))}</td><td>${r.score.toFixed(2)}</td><td>${esc(r.source_kind)}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="event" data-event="${esc(r.event_id)}"><td class="mono">${esc((r.session_id||'').slice(0,8))}</td><td>${r.score.toFixed(2)}</td><td>${esc(r.source_kind)}</td></tr>`).join('');
   return section('Frustration (most negative)',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th>Kind</th></tr></thead><tbody>${neg}</tbody></table>`);
 }
@@ -206,7 +211,7 @@ function renderSentiment(rows) {
 function renderTopics(rows) {
   if (!rows || !rows.length) return '';
   const body = rows.slice(0, 20).map(t =>
-    `<tr><td>${esc(t.label)}</td><td>${esc(t.keywords || '')}</td><td>${t.size}</td><td>${(t.pain_score||0).toFixed(2)}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="events" data-by="topic" data-value="${esc(t.topic_id)}" data-drill-title="topic: ${esc(t.label)}"><td>${esc(t.label)}</td><td>${esc(t.keywords || '')}</td><td>${t.size}</td><td>${(t.pain_score||0).toFixed(2)}</td></tr>`).join('');
   return section('Topics (ranked by pain)',
     `<table class="insights-table"><thead><tr><th>Topic</th><th>Keywords</th><th>Docs</th><th>Pain</th></tr></thead><tbody>${body}</tbody></table>`);
 }
@@ -214,7 +219,7 @@ function renderTopics(rows) {
 function renderErrorClusters(rows) {
   if (!rows || !rows.length) return '';
   const body = rows.slice(0, 20).map(c =>
-    `<tr><td>${esc(c.label)}</td><td>${c.size}</td><td>${c.session_spread}</td><td class="mono">${esc((c.exemplar||'').slice(0,60))}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="events" data-by="errorCluster" data-value="${esc(c.cluster_id)}" data-drill-title="cluster: ${esc(c.label)}"><td>${esc(c.label)}</td><td>${c.size}</td><td>${c.session_spread}</td><td class="mono">${esc((c.exemplar||'').slice(0,60))}</td></tr>`).join('');
   return section('Error clusters',
     `<table class="insights-table"><thead><tr><th>Label</th><th>Count</th><th>Sessions</th><th>Exemplar</th></tr></thead><tbody>${body}</tbody></table>`);
 }
@@ -222,7 +227,7 @@ function renderErrorClusters(rows) {
 function renderPivots(rows) {
   if (!rows || !rows.length) return '';
   const body = rows.slice(0, 15).map(p =>
-    `<tr><td class="mono">${esc((p.session_id||'').slice(0,8))}</td><td>${(p.confidence||0).toFixed(2)}</td><td>${esc(p.evidence||'')}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="session" data-session="${esc(p.session_id)}"><td class="mono">${esc((p.session_id||'').slice(0,8))}</td><td>${(p.confidence||0).toFixed(2)}</td><td>${esc(p.evidence||'')}</td></tr>`).join('');
   return section('Agent pivots (semantic)',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>${body}</tbody></table>`);
 }
@@ -240,7 +245,8 @@ function wireInsightsButtons() {
   }
 
   document.querySelectorAll('.triage-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       const session = btn.dataset.session;
       btn.textContent = 'Flagging…';
       const res = await fetch(API + '/api/insights/semantic/triage?session=' + encodeURIComponent(session), { method: 'POST' });

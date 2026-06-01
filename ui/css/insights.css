@@ -204,3 +204,4 @@
 .insights-table thead th.sortable:hover { color: var(--text-secondary); }
 .insights-table thead th.sort-asc::after { content: ' ▲'; color: var(--amber); }
 .insights-table thead th.sort-desc::after { content: ' ▼'; color: var(--amber); }
+.insights-table tbody tr.is-drillable { cursor: pointer; }
