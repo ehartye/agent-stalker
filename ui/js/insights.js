@@ -58,6 +58,7 @@ export async function renderInsights() {
     ${renderPivots(pivots)}
   `;
   wireInsightsButtons();
+  panel.querySelectorAll('.insights-table').forEach(makeSortable);
   applyInsightsSearch();
 }
 
@@ -135,8 +136,8 @@ function renderErrors(errors) {
   const sess = (errors.bySession || []).slice(0, 10).map(s => `<tr><td class="mono">${esc((s.session_id || '').slice(0,8))}</td><td>${s.errors}</td><td>${(s.errorRate*100).toFixed(1)}%</td></tr>`).join('');
   return section('Errors',
     `<div class="insights-cols">
-       <div><h4>By tool</h4><table class="insights-table"><tbody>${tool}</tbody></table></div>
-       <div><h4>By session</h4><table class="insights-table"><tbody>${sess}</tbody></table></div>
+       <div><h4>By tool</h4><table class="insights-table"><thead><tr><th>Tool</th><th>Errors</th></tr></thead><tbody>${tool}</tbody></table></div>
+       <div><h4>By session</h4><table class="insights-table"><thead><tr><th>Session</th><th>Errors</th><th>Rate</th></tr></thead><tbody>${sess}</tbody></table></div>
      </div>`);
 }
 
@@ -146,6 +147,34 @@ function renderThrash(thrash) {
     `<tr><td class="mono">${esc(c.session_id.slice(0,8))}</td><td>${esc(c.tool_name)}</td><td class="mono">${esc(String(c.target).slice(0,40))}</td><td>${c.chainLength}</td></tr>`).join('');
   return section('Thrash / pivot-loops',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Tool</th><th>Target</th><th>Retry depth</th></tr></thead><tbody>${chains}</tbody></table>`);
+}
+
+// Generic DOM sort: click a <th> to sort the table's rows by that column.
+// Numeric-aware; skips empty / colspan headers. Sortable columns must precede
+// any colspan header (true for all current tables — only Pain has a colspan,
+// and its sortable columns Session/Score come before it).
+function makeSortable(table) {
+  if (!table.tHead || !table.tBodies[0]) return;
+  const ths = [...table.tHead.rows[0].cells];
+  ths.forEach((th, colIndex) => {
+    if (!th.textContent.trim() || th.colSpan > 1) return;
+    th.classList.add('sortable');
+    th.addEventListener('click', () => {
+      const tbody = table.tBodies[0];
+      const asc = th.dataset.sortDir !== 'asc';
+      ths.forEach(h => { h.removeAttribute('data-sort-dir'); h.classList.remove('sort-asc', 'sort-desc'); });
+      th.dataset.sortDir = asc ? 'asc' : 'desc';
+      th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+      const num = (s) => { const f = parseFloat(String(s).replace(/[, ]/g, '')); return isNaN(f) ? null : f; };
+      [...tbody.rows].sort((ra, rb) => {
+        const a = (ra.cells[colIndex]?.textContent || '').trim();
+        const b = (rb.cells[colIndex]?.textContent || '').trim();
+        const na = num(a), nb = num(b);
+        const cmp = (na !== null && nb !== null) ? na - nb : a.localeCompare(b);
+        return asc ? cmp : -cmp;
+      }).forEach(r => tbody.appendChild(r));
+    });
+  });
 }
 
 function section(title, inner) {

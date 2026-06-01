@@ -199,3 +199,8 @@
   padding: 1px 5px;
   border-radius: 3px;
 }
+
+.insights-table thead th.sortable { cursor: pointer; user-select: none; }
+.insights-table thead th.sortable:hover { color: var(--text-secondary); }
+.insights-table thead th.sort-asc::after { content: ' ▲'; color: var(--amber); }
+.insights-table thead th.sort-desc::after { content: ' ▼'; color: var(--amber); }
