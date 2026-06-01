@@ -77,6 +77,14 @@ describe("constituentEvents", () => {
     expect(events[0].session_id).toBe("keep");
   });
 
+  it("caps results at 500 and sets truncated", () => {
+    seedSession("s1");
+    for (let i = 0; i < 600; i++) seedToolCall("s1", "Bash", { command: `c${i}` });
+    const { events, truncated } = constituentEvents(getDb(), { by: "tool", value: "Bash" });
+    expect(events.length).toBe(500);
+    expect(truncated).toBe(true);
+  });
+
   it("throws on unknown by", () => {
     expect(() => constituentEvents(getDb(), { by: "nope" as any, value: "x" })).toThrow();
   });
