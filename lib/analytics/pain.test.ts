@@ -35,5 +35,9 @@ describe("pain score", () => {
     expect(board[0].breakdown).toHaveProperty("churn");
     expect(board[0].breakdown).toHaveProperty("thrash");
     expect(board[0].breakdown).toHaveProperty("effort");
+    // normalized signals (0..1, pre-weight) back the comparable UI bars
+    expect(board[0].normalized).toHaveProperty("errorRate");
+    expect(board[0].normalized.errorRate).toBeGreaterThan(0);
+    expect(board[0].normalized.errorRate).toBeLessThanOrEqual(1);
   });
 });

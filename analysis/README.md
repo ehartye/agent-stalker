@@ -92,7 +92,8 @@ aborting the whole batch.
 |-------------------------|--------------------|------------------------------------------------------------------------------------------|
 | `AGENT_STALKER_DB_PATH` | sidecar + core     | Path to the SQLite database. Defaults to `~/.claude/agent-stalker.db` if unset.           |
 | `ANTHROPIC_API_KEY`     | `triage` only      | Required for LLM triage. Without it, triage is disabled (the dashboard says so).          |
-| `AGENT_STALKER_PYTHON`  | the dashboard      | Python executable the server uses to spawn this sidecar. Defaults to `python`.            |
+| `AGENT_STALKER_PYTHON`  | the dashboard      | Python executable the server uses to spawn this sidecar. Defaults to `python` on Windows, `python3` elsewhere. |
+| `AGENT_STALKER_TRIAGE_MODEL` | `triage` only | Override the Claude model used for LLM triage. Defaults to `claude-sonnet-4-6`.        |
 
 ## How the dashboard drives it
 

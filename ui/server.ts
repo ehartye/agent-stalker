@@ -233,7 +233,9 @@ export function handleApiForTest(url: URL, method: string): Response {
 }
 
 function pythonCmd(): string {
-  return process.env.AGENT_STALKER_PYTHON ?? "python";
+  // On Windows the launcher is `python`; on Linux/macOS only `python3` is
+  // reliably on PATH. Override either with AGENT_STALKER_PYTHON.
+  return process.env.AGENT_STALKER_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
 }
 
 async function runSemanticBatch(): Promise<Response> {

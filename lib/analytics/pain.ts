@@ -8,6 +8,9 @@ export interface PainEntry {
   session_id: string;
   score: number;
   breakdown: { errorRate: number; churn: number; thrash: number; effort: number };
+  // Pre-weight normalized signals (each 0..1 against its own max), so a UI can
+  // render comparable bars. `breakdown` is these multiplied by the pain weights.
+  normalized: { errorRate: number; churn: number; thrash: number; effort: number };
   raw: { errorRate: number; churnEdits: number; thrashDepth: number; effort: number };
 }
 
@@ -56,13 +59,19 @@ export function painLeaderboard(db: Database): PainEntry[] {
     const rawChurn = churnBy.get(session_id) ?? 0;
     const rawThrash = thrashBy.get(session_id) ?? 0;
     const rawEffort = effortBy.get(session_id) ?? 0;
+    const normalized = {
+      errorRate: normErr(rawErr),
+      churn: normChurn(rawChurn),
+      thrash: normThrash(rawThrash),
+      effort: normEffort(rawEffort),
+    };
     const breakdown = {
-      errorRate: w.errorRate * normErr(rawErr),
-      churn: w.churn * normChurn(rawChurn),
-      thrash: w.thrash * normThrash(rawThrash),
-      effort: w.effort * normEffort(rawEffort),
+      errorRate: w.errorRate * normalized.errorRate,
+      churn: w.churn * normalized.churn,
+      thrash: w.thrash * normalized.thrash,
+      effort: w.effort * normalized.effort,
     };
     const score = breakdown.errorRate + breakdown.churn + breakdown.thrash + breakdown.effort;
-    return { session_id, score, breakdown, raw: { errorRate: rawErr, churnEdits: rawChurn, thrashDepth: rawThrash, effort: rawEffort } };
+    return { session_id, score, breakdown, normalized, raw: { errorRate: rawErr, churnEdits: rawChurn, thrashDepth: rawThrash, effort: rawEffort } };
   }).sort((a, b) => b.score - a.score);
 }

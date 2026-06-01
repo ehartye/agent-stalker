@@ -5,7 +5,7 @@ import time
 
 from ..db import parse_data
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = os.environ.get("AGENT_STALKER_TRIAGE_MODEL", "claude-sonnet-4-6")
 
 PROMPT = """You are analyzing one coding-agent session for workflow pain.
 Given the session digest below, respond with ONLY a JSON object:

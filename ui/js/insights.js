@@ -49,16 +49,22 @@ function bar(frac) {
 
 function renderPain(pain) {
   if (!pain || !pain.length) return section('Pain leaderboard', '<p class="empty">No data yet.</p>');
-  const rows = pain.slice(0, 20).map(p => `
+  const rows = pain.slice(0, 20).map(p => {
+    // Render bars from the pre-weight normalized signals (each fills 0..100% on
+    // its own scale) so the four signals are visually comparable; the weighted
+    // contributions live in p.breakdown and sum to p.score.
+    const n = p.normalized || p.breakdown;
+    return `
     <tr>
       <td class="mono">${esc((p.session_id || '').slice(0, 8))}</td>
       <td>${p.score.toFixed(3)}</td>
-      <td>${bar(p.breakdown.errorRate)} err</td>
-      <td>${bar(p.breakdown.churn)} churn</td>
-      <td>${bar(p.breakdown.thrash)} thrash</td>
-      <td>${bar(p.breakdown.effort)} effort</td>
+      <td>${bar(n.errorRate)} err</td>
+      <td>${bar(n.churn)} churn</td>
+      <td>${bar(n.thrash)} thrash</td>
+      <td>${bar(n.effort)} effort</td>
       <td><button class="insights-btn triage-btn" data-session="${esc(p.session_id)}">Triage</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   return section('Pain leaderboard',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th colspan="4">Breakdown</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
