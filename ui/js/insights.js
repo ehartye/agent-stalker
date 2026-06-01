@@ -80,15 +80,15 @@ function renderPain(pain) {
     <tr class="is-drillable" data-drill="session" data-session="${esc(p.session_id)}">
       <td class="mono">${esc((p.session_id || '').slice(0, 8))}</td>
       <td><span class="pain-score">${p.score.toFixed(3)}</span></td>
-      <td><span class="pain-cell">${bar(n.errorRate, '--accent-red')} err</span></td>
-      <td><span class="pain-cell">${bar(n.churn, '--accent-amber')} churn</span></td>
-      <td><span class="pain-cell">${bar(n.thrash, '--accent-purple')} thrash</span></td>
-      <td><span class="pain-cell">${bar(n.effort, '--accent-blue')} effort</span></td>
+      <td data-sort="${n.errorRate}"><span class="pain-cell">${bar(n.errorRate, '--accent-red')}</span></td>
+      <td data-sort="${n.churn}"><span class="pain-cell">${bar(n.churn, '--accent-amber')}</span></td>
+      <td data-sort="${n.thrash}"><span class="pain-cell">${bar(n.thrash, '--accent-purple')}</span></td>
+      <td data-sort="${n.effort}"><span class="pain-cell">${bar(n.effort, '--accent-blue')}</span></td>
       <td><button class="insights-btn triage-btn" data-session="${esc(p.session_id)}">Flag for triage</button></td>
     </tr>`;
   }).join('');
   return section('Pain leaderboard',
-    `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th colspan="4">Breakdown</th><th></th></tr></thead><tbody>${rows}</tbody></table>`);
+    `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th>Err</th><th>Churn</th><th>Thrash</th><th>Effort</th><th></th></tr></thead><tbody>${rows}</tbody></table>`);
 }
 
 function renderTriage(rows) {
@@ -155,9 +155,9 @@ function renderThrash(thrash) {
 }
 
 // Generic DOM sort: click a <th> to sort the table's rows by that column.
-// Numeric-aware; skips empty / colspan headers. Sortable columns must precede
-// any colspan header (true for all current tables — only Pain has a colspan,
-// and its sortable columns Session/Score come before it).
+// Numeric-aware; a cell's data-sort attribute (if present) overrides its rendered
+// text for sorting (used by the Pain breakdown bars, which show no number). Skips
+// empty / colspan headers; no current table puts a sortable column after a colspan.
 function makeSortable(table) {
   if (!table.tHead || !table.tBodies[0]) return;
   const ths = [...table.tHead.rows[0].cells];
@@ -171,11 +171,15 @@ function makeSortable(table) {
       th.dataset.sortDir = asc ? 'asc' : 'desc';
       th.classList.add(asc ? 'sort-asc' : 'sort-desc');
       const num = (s) => { const f = parseFloat(String(s).replace(/[, ]/g, '')); return isNaN(f) ? null : f; };
+      const cellVal = (r) => {
+        const c = r.cells[colIndex];
+        if (!c) return '';
+        return c.dataset.sort !== undefined ? c.dataset.sort : (c.textContent || '').trim();
+      };
       [...tbody.rows].sort((ra, rb) => {
-        const a = (ra.cells[colIndex]?.textContent || '').trim();
-        const b = (rb.cells[colIndex]?.textContent || '').trim();
+        const a = cellVal(ra), b = cellVal(rb);
         const na = num(a), nb = num(b);
-        const cmp = (na !== null && nb !== null) ? na - nb : a.localeCompare(b);
+        const cmp = (na !== null && nb !== null) ? na - nb : String(a).localeCompare(String(b));
         return asc ? cmp : -cmp;
       }).forEach(r => tbody.appendChild(r));
     });
