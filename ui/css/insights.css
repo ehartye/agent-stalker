@@ -4,6 +4,11 @@
    so without this the panel would sit in the 38fr column and leave 62fr empty. */
 #insightsPanel {
   grid-column: 1 / -1;
+  /* Override .content-panel's flex column: as a flex parent its section cards
+     become shrinkable flex items and compress vertically instead of scrolling.
+     A plain block lets them keep their natural height and the panel scrolls. */
+  display: block;
+  min-height: 0;
   padding: 22px 24px 48px;
   overflow-y: auto;
   font-family: var(--font-body);

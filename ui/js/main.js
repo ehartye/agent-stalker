@@ -39,6 +39,9 @@ function setView(view) {
   document.getElementById('kanbanPanel').style.display = isInsights ? 'none' : '';
   document.getElementById('activityPanel').style.display = isInsights ? 'none' : '';
   document.getElementById('insightsPanel').style.display = isInsights ? '' : 'none';
+  // The chip bar holds Activity-only filters (tools/agents/event types) and just
+  // steals vertical space on Insights — hide it there.
+  document.getElementById('chipBar').style.display = isInsights ? 'none' : '';
   document.getElementById('viewActivityBtn').classList.toggle('active', !isInsights);
   document.getElementById('viewInsightsBtn').classList.toggle('active', isInsights);
   if (isInsights) renderInsights();
