@@ -15,6 +15,7 @@ export const state = {
   toolChipFilters: new Set(),
   eventTypeFilters: new Set(),
   isLive: true,
+  currentView: 'activity',
   lastTimestamp: 0,
   eventsFullyLoaded: false,
   loadingMore: false,

@@ -1,8 +1,23 @@
-import { API } from './state.js';
+import { API, state } from './state.js';
 import { esc } from './util.js';
 
 async function fetchJSON(url) {
   try { const r = await fetch(API + url); return r.ok ? await r.json() : null; } catch { return null; }
+}
+
+// When sessions are selected in the header picker, scope the structured metrics
+// to them (empty selection → global across all sessions).
+function sessionQS() {
+  const ids = [...state.selectedSessionIds];
+  return ids.length ? '?session=' + ids.map(encodeURIComponent).join(',') : '';
+}
+
+// Client-side filter: hide table rows that don't match the header search box.
+export function applyInsightsSearch() {
+  const q = (state.searchText || '').toLowerCase();
+  document.querySelectorAll('#insightsPanel .insights-table tbody tr').forEach(tr => {
+    tr.style.display = !q || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
 }
 
 export async function renderInsights() {
@@ -10,12 +25,13 @@ export async function renderInsights() {
   if (!panel) return;
   panel.innerHTML = '<div class="insights-loading">Loading insights…</div>';
 
+  const qs = sessionQS();
   const [pain, tokens, errors, churn, thrash, semantic, triage] = await Promise.all([
-    fetchJSON('/api/insights/pain'),
-    fetchJSON('/api/insights/tokens'),
-    fetchJSON('/api/insights/errors'),
-    fetchJSON('/api/insights/churn'),
-    fetchJSON('/api/insights/thrash'),
+    fetchJSON('/api/insights/pain' + qs),
+    fetchJSON('/api/insights/tokens' + qs),
+    fetchJSON('/api/insights/errors' + qs),
+    fetchJSON('/api/insights/churn' + qs),
+    fetchJSON('/api/insights/thrash' + qs),
     fetchJSON('/api/insights/semantic/status'),
     fetchJSON('/api/insights/semantic/triage'),
   ]);
@@ -42,6 +58,7 @@ export async function renderInsights() {
     ${renderPivots(pivots)}
   `;
   wireInsightsButtons();
+  applyInsightsSearch();
 }
 
 function bar(frac, colorVar) {

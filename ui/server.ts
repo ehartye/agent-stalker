@@ -6,6 +6,7 @@ import { painLeaderboard } from "../lib/analytics/pain";
 import { sessionErrorStats, errorsByTool } from "../lib/analytics/errors";
 import { fileChurn } from "../lib/analytics/churn";
 import { errorRetryChains, taskBounces } from "../lib/analytics/thrash";
+import { sessionClause } from "../lib/analytics/filter";
 
 const port = parseInt(process.argv.find((_, i, a) => a[i - 1] === "--port") ?? "3141");
 
@@ -178,28 +179,34 @@ function handleApi(url: URL, method: string): Response {
     return jsonResponse(rows);
   }
 
+  // Optional ?session=id1,id2 scopes the structured metrics to those sessions
+  // (empty/absent → global across all sessions).
+  const sessionFilter = params.get("session");
+  const insightsSessionIds = sessionFilter ? sessionFilter.split(",").filter(Boolean) : undefined;
+
   if (path === "/api/insights/pain") {
-    return jsonResponse(painLeaderboard(db));
+    return jsonResponse(painLeaderboard(db, insightsSessionIds));
   }
   if (path === "/api/insights/errors") {
-    return jsonResponse({ bySession: sessionErrorStats(db), byTool: errorsByTool(db) });
+    return jsonResponse({ bySession: sessionErrorStats(db, insightsSessionIds), byTool: errorsByTool(db, insightsSessionIds) });
   }
   if (path === "/api/insights/churn") {
-    return jsonResponse(fileChurn(db));
+    return jsonResponse(fileChurn(db, insightsSessionIds));
   }
   if (path === "/api/insights/thrash") {
-    return jsonResponse({ retryChains: errorRetryChains(db), taskBounces: taskBounces(db) });
+    return jsonResponse({ retryChains: errorRetryChains(db, insightsSessionIds), taskBounces: taskBounces(db, insightsSessionIds) });
   }
   if (path === "/api/insights/tokens") {
+    const { clause, params: sp } = sessionClause(insightsSessionIds);
     const rows = db.query(
       `SELECT session_id,
               SUM(COALESCE(input_tokens,0)) AS input_tokens,
               SUM(COALESCE(output_tokens,0)) AS output_tokens,
               SUM(COALESCE(cache_creation_input_tokens,0)) AS cache_creation_input_tokens,
               SUM(COALESCE(cache_read_input_tokens,0)) AS cache_read_input_tokens
-       FROM usage GROUP BY session_id
+       FROM usage WHERE 1=1${clause} GROUP BY session_id
        ORDER BY (SUM(COALESCE(input_tokens,0))+SUM(COALESCE(output_tokens,0))) DESC`,
-    ).all();
+    ).all(...sp);
     return jsonResponse(rows);
   }
 

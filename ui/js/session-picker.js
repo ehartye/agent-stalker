@@ -1,6 +1,12 @@
 import { state } from './state.js';
 import { esc, sessionLabel, sessionLastEvent } from './util.js';
 import { loadSessions, loadSessionDetails, loadEvents, loadStats } from './api.js';
+import { renderInsights } from './insights.js';
+
+// When the session selection changes, the Insights view (if open) must re-scope.
+function refreshInsightsIfActive() {
+  if (state.currentView === 'insights') renderInsights();
+}
 
 export function renderSessionDropdown() {
   const count = state.selectedSessionIds.size;
@@ -54,6 +60,7 @@ function renderSessionList(listId, sessions, countId, isArchived) {
       loadSessionDetails();
       loadEvents();
       loadStats();
+      refreshInsightsIfActive();
     });
   });
 
@@ -68,6 +75,7 @@ function renderSessionList(listId, sessions, countId, isArchived) {
       loadSessionDetails();
       loadEvents();
       loadStats();
+      refreshInsightsIfActive();
     });
   });
 
@@ -83,6 +91,7 @@ function renderSessionList(listId, sessions, countId, isArchived) {
       loadSessionDetails();
       loadEvents();
       loadStats();
+      refreshInsightsIfActive();
     });
   });
 }

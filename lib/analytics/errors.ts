@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { sessionClause } from "./filter";
 
 interface EventRow { session_id: string; hook_event_name: string; tool_name: string | null; data: string | null; }
 
@@ -13,16 +14,17 @@ function isError(row: EventRow): boolean {
   return false;
 }
 
-function toolCallRows(db: Database): EventRow[] {
+function toolCallRows(db: Database, sessionIds?: string[]): EventRow[] {
+  const { clause, params } = sessionClause(sessionIds);
   return db.query(
-    "SELECT session_id, hook_event_name, tool_name, data FROM events WHERE hook_event_name IN ('PostToolUse','PostToolUseFailure')",
-  ).all() as EventRow[];
+    `SELECT session_id, hook_event_name, tool_name, data FROM events WHERE hook_event_name IN ('PostToolUse','PostToolUseFailure')${clause}`,
+  ).all(...params) as EventRow[];
 }
 
 export interface SessionErrorStat { session_id: string; errors: number; toolCalls: number; errorRate: number; }
 
-export function sessionErrorStats(db: Database): SessionErrorStat[] {
-  const rows = toolCallRows(db);
+export function sessionErrorStats(db: Database, sessionIds?: string[]): SessionErrorStat[] {
+  const rows = toolCallRows(db, sessionIds);
   const map = new Map<string, { errors: number; toolCalls: number }>();
   for (const r of rows) {
     const m = map.get(r.session_id) ?? { errors: 0, toolCalls: 0 };
@@ -38,8 +40,8 @@ export function sessionErrorStats(db: Database): SessionErrorStat[] {
 
 export interface ToolErrorStat { tool_name: string; errors: number; }
 
-export function errorsByTool(db: Database): ToolErrorStat[] {
-  const rows = toolCallRows(db).filter(isError);
+export function errorsByTool(db: Database, sessionIds?: string[]): ToolErrorStat[] {
+  const rows = toolCallRows(db, sessionIds).filter(isError);
   const map = new Map<string, number>();
   for (const r of rows) {
     const t = r.tool_name ?? "(unknown)";

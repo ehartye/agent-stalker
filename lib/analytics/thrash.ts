@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { extractTarget } from "./extract";
 import { ANALYTICS_CONFIG } from "./config";
+import { sessionClause } from "./filter";
 
 interface EventRow {
   session_id: string; hook_event_name: string; tool_name: string | null;
@@ -14,12 +15,13 @@ export interface RetryChain { session_id: string; agent_id: string | null; tool_
  * retryWindowMs where at least one of the pair is a failure. chainLength counts
  * the links — i.e. how much retrying/churn clustered around failures on that target.
  */
-export function errorRetryChains(db: Database): RetryChain[] {
+export function errorRetryChains(db: Database, sessionIds?: string[]): RetryChain[] {
+  const { clause, params } = sessionClause(sessionIds);
   const rows = db.query(
     `SELECT session_id, hook_event_name, tool_name, agent_id, timestamp, data
-     FROM events WHERE hook_event_name IN ('PostToolUse','PostToolUseFailure') AND tool_name IS NOT NULL
+     FROM events WHERE hook_event_name IN ('PostToolUse','PostToolUseFailure') AND tool_name IS NOT NULL${clause}
      ORDER BY timestamp ASC`,
-  ).all() as EventRow[];
+  ).all(...params) as EventRow[];
 
   // group by session|agent|tool|target
   const groups = new Map<string, { row: EventRow; isError: boolean; target: string }[]>();
@@ -60,11 +62,12 @@ interface TaskEventRow { task_id: string; session_id: string; new_value: string 
 export interface TaskBounce { task_id: string; session_id: string; bounces: number; }
 
 /** A bounce = a status_change whose new_value equals a status the task was already in earlier. */
-export function taskBounces(db: Database): TaskBounce[] {
+export function taskBounces(db: Database, sessionIds?: string[]): TaskBounce[] {
+  const { clause, params } = sessionClause(sessionIds);
   const rows = db.query(
     `SELECT task_id, session_id, new_value, timestamp FROM task_events
-     WHERE event_type = 'status_change' ORDER BY timestamp ASC`,
-  ).all() as TaskEventRow[];
+     WHERE event_type = 'status_change'${clause} ORDER BY timestamp ASC`,
+  ).all(...params) as TaskEventRow[];
 
   const seen = new Map<string, Set<string>>(); // key task|session -> statuses seen
   const bounceCount = new Map<string, number>();

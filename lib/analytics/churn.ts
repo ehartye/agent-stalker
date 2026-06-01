@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { extractFilePath } from "./extract";
+import { sessionClause } from "./filter";
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
@@ -14,10 +15,11 @@ function median(nums: number[]): number {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-export function fileChurn(db: Database): FileChurnStat[] {
+export function fileChurn(db: Database, sessionIds?: string[]): FileChurnStat[] {
+  const { clause, params } = sessionClause(sessionIds);
   const rows = db.query(
-    "SELECT session_id, tool_name, timestamp, data FROM events WHERE hook_event_name = 'PostToolUse' AND tool_name IS NOT NULL ORDER BY timestamp ASC",
-  ).all() as EventRow[];
+    `SELECT session_id, tool_name, timestamp, data FROM events WHERE hook_event_name = 'PostToolUse' AND tool_name IS NOT NULL${clause} ORDER BY timestamp ASC`,
+  ).all(...params) as EventRow[];
 
   const byFile = new Map<string, { sessions: Set<string>; times: number[] }>();
   for (const r of rows) {

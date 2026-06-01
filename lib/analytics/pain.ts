@@ -3,6 +3,7 @@ import { ANALYTICS_CONFIG } from "./config";
 import { sessionErrorStats } from "./errors";
 import { errorRetryChains, taskBounces } from "./thrash";
 import { sessionEffort } from "./effort";
+import { sessionClause } from "./filter";
 
 export interface PainEntry {
   session_id: string;
@@ -20,16 +21,16 @@ function normalizer(values: number[]): (v: number) => number {
   return (v: number) => (max > 0 ? v / max : 0);
 }
 
-export function painLeaderboard(db: Database): PainEntry[] {
-  const errors = sessionErrorStats(db);
-  const effort = sessionEffort(db);
-  const chains = errorRetryChains(db);
-  const bounces = taskBounces(db);
+export function painLeaderboard(db: Database, sessionIds?: string[]): PainEntry[] {
+  const errors = sessionErrorStats(db, sessionIds);
+  const effort = sessionEffort(db, sessionIds);
+  const chains = errorRetryChains(db, sessionIds);
+  const bounces = taskBounces(db, sessionIds);
 
   // sessions = union of all session ids seen
-  const sessionIds = new Set<string>();
-  errors.forEach((e) => sessionIds.add(e.session_id));
-  effort.forEach((e) => sessionIds.add(e.session_id));
+  const seenIds = new Set<string>();
+  errors.forEach((e) => seenIds.add(e.session_id));
+  effort.forEach((e) => seenIds.add(e.session_id));
 
   // per-session raw signals
   const errorRateBy = new Map(errors.map((e) => [e.session_id, e.errorRate]));
@@ -42,12 +43,13 @@ export function painLeaderboard(db: Database): PainEntry[] {
   // churn is per-file; attribute to sessions via a per-session edit count
   const churnBy = new Map<string, number>();
   // recompute session churn from events: count edit events per session over churnMinEdits files
+  const editFilter = sessionClause(sessionIds);
   const editRows = db.query(
-    "SELECT session_id, COUNT(*) AS edits FROM events WHERE hook_event_name='PostToolUse' AND tool_name IN ('Edit','Write','MultiEdit','NotebookEdit') GROUP BY session_id",
-  ).all() as { session_id: string; edits: number }[];
+    `SELECT session_id, COUNT(*) AS edits FROM events WHERE hook_event_name='PostToolUse' AND tool_name IN ('Edit','Write','MultiEdit','NotebookEdit')${editFilter.clause} GROUP BY session_id`,
+  ).all(...editFilter.params) as { session_id: string; edits: number }[];
   for (const r of editRows) churnBy.set(r.session_id, r.edits);
 
-  const ids = [...sessionIds];
+  const ids = [...seenIds];
   const normErr = normalizer(ids.map((id) => errorRateBy.get(id) ?? 0));
   const normChurn = normalizer(ids.map((id) => churnBy.get(id) ?? 0));
   const normThrash = normalizer(ids.map((id) => thrashBy.get(id) ?? 0));

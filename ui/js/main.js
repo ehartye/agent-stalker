@@ -7,7 +7,7 @@ import { renderChipBar } from './chip-bar.js';
 import { renderKanban } from './kanban.js';
 import { renderActivity } from './activity.js';
 import { closeModal, copyCurrentEvent, modalPrev, modalNext } from './modal.js';
-import { renderInsights } from './insights.js';
+import { renderInsights, applyInsightsSearch } from './insights.js';
 
 // Modal handlers
 document.getElementById('modalClose').addEventListener('click', closeModal);
@@ -18,10 +18,11 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 document.getElementById('modalPrev').addEventListener('click', modalPrev);
 document.getElementById('modalNext').addEventListener('click', modalNext);
 
-// Search
+// Search — filters the active view (Activity event stream, or Insights tables)
 document.getElementById('searchInput').addEventListener('input', e => {
   state.searchText = e.target.value;
-  renderActivity();
+  if (state.currentView === 'insights') applyInsightsSearch();
+  else renderActivity();
 });
 
 // Live toggle
@@ -34,6 +35,7 @@ document.getElementById('liveToggle').addEventListener('click', () => {
 // View toggle (Activity <-> Insights)
 function setView(view) {
   const isInsights = view === 'insights';
+  state.currentView = view;
   document.getElementById('kanbanPanel').style.display = isInsights ? 'none' : '';
   document.getElementById('activityPanel').style.display = isInsights ? 'none' : '';
   document.getElementById('insightsPanel').style.display = isInsights ? '' : 'none';

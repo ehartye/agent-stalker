@@ -49,4 +49,25 @@ describe("error metrics", () => {
     expect(byTool.find((r) => r.tool_name === "Bash")!.errors).toBe(2);
     expect(byTool.find((r) => r.tool_name === "Edit")!.errors).toBe(1);
   });
+
+  it("scopes to the given session ids when provided", () => {
+    seedSession("keep");
+    seedSession("drop");
+    seedToolFailure("keep", "Bash", { command: "a" });
+    seedToolCall("keep", "Bash", { command: "b" });
+    seedToolFailure("drop", "Edit", { file_path: "/z" });
+
+    const scoped = sessionErrorStats(getDb(), ["keep"]);
+    expect(scoped).toHaveLength(1);
+    expect(scoped[0].session_id).toBe("keep");
+    expect(scoped[0].errors).toBe(1);
+
+    // errorsByTool restricted to "keep" excludes the Edit failure in "drop"
+    const byTool = errorsByTool(getDb(), ["keep"]);
+    expect(byTool.find((r) => r.tool_name === "Edit")).toBeUndefined();
+    expect(byTool.find((r) => r.tool_name === "Bash")!.errors).toBe(1);
+
+    // no filter → both sessions counted
+    expect(sessionErrorStats(getDb()).length).toBe(2);
+  });
 });

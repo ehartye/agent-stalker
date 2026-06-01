@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { extractFilePath } from "./extract";
+import { sessionClause } from "./filter";
 
 interface EventRow { session_id: string; tool_name: string | null; timestamp: number; data: string | null; }
 
@@ -8,10 +9,11 @@ export interface SessionEffort {
   files: number; durationMs: number; realTokens: number | null;
 }
 
-export function sessionEffort(db: Database): SessionEffort[] {
+export function sessionEffort(db: Database, sessionIds?: string[]): SessionEffort[] {
+  const { clause, params } = sessionClause(sessionIds);
   const rows = db.query(
-    "SELECT session_id, tool_name, timestamp, data FROM events ORDER BY timestamp ASC",
-  ).all() as EventRow[];
+    `SELECT session_id, tool_name, timestamp, data FROM events WHERE 1=1${clause} ORDER BY timestamp ASC`,
+  ).all(...params) as EventRow[];
 
   const map = new Map<string, { events: number; toolCalls: number; bytes: number; files: Set<string>; min: number; max: number }>();
   for (const r of rows) {
@@ -33,8 +35,8 @@ export function sessionEffort(db: Database): SessionEffort[] {
   // real tokens, if the usage table is populated
   const tokenRows = db.query(
     `SELECT session_id, SUM(COALESCE(input_tokens,0)+COALESCE(output_tokens,0)) AS total
-     FROM usage GROUP BY session_id`,
-  ).all() as { session_id: string; total: number }[];
+     FROM usage WHERE 1=1${clause} GROUP BY session_id`,
+  ).all(...params) as { session_id: string; total: number }[];
   const tokenMap = new Map(tokenRows.map((r) => [r.session_id, r.total]));
 
   return [...map.entries()].map(([session_id, m]) => ({
