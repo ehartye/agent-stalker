@@ -7,6 +7,7 @@ import { sessionErrorStats, errorsByTool } from "../lib/analytics/errors";
 import { fileChurn } from "../lib/analytics/churn";
 import { errorRetryChains, taskBounces } from "../lib/analytics/thrash";
 import { sessionClause } from "../lib/analytics/filter";
+import { constituentEvents } from "../lib/analytics/events-by";
 
 const port = parseInt(process.argv.find((_, i, a) => a[i - 1] === "--port") ?? "3141");
 
@@ -208,6 +209,24 @@ function handleApi(url: URL, method: string): Response {
        ORDER BY (SUM(COALESCE(input_tokens,0))+SUM(COALESCE(output_tokens,0))) DESC`,
     ).all(...sp);
     return jsonResponse(rows);
+  }
+
+  if (path === "/api/insights/events") {
+    const by = params.get("by");
+    if (!by) return jsonResponse({ error: "by is required" }, 400);
+    try {
+      const result = constituentEvents(db, {
+        by: by as any,
+        value: params.get("value") ?? "",
+        errorsOnly: params.get("errorsOnly") === "1",
+        tool: params.get("tool") ?? undefined,
+        session: params.get("retry_session") ?? undefined,
+        sessionIds: insightsSessionIds,
+      });
+      return jsonResponse(result);
+    } catch (e) {
+      return jsonResponse({ error: String(e) }, 400);
+    }
   }
 
   if (path === "/api/insights/semantic/status") {

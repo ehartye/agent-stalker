@@ -195,3 +195,31 @@ describe("semantic endpoints", () => {
     expect(row.flagged_at).toBeGreaterThan(0);
   });
 });
+
+describe("constituent events endpoint", () => {
+  const testDbPath = join(tmpdir(), `as-server-eventsby-${Date.now()}.db`);
+  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  afterEach(() => {
+    closeDb();
+    for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }
+    delete process.env.AGENT_STALKER_DB_PATH;
+  });
+
+  it("GET /api/insights/events?by=tool&value=Bash&errorsOnly=1 returns failures", async () => {
+    seedSession("s1");
+    seedToolFailure("s1", "Bash", { command: "bad" });
+    seedToolCall("s1", "Bash", { command: "ok" });
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/events?by=tool&value=Bash&errorsOnly=1"), "GET");
+    const body = await res.json();
+    expect(body.events.length).toBe(1);
+    expect(body.events[0].hook_event_name).toBe("PostToolUseFailure");
+    expect(body.truncated).toBe(false);
+  });
+
+  it("missing by → 400", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/events?value=x"), "GET");
+    expect(res.status).toBe(400);
+  });
+});
