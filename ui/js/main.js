@@ -50,6 +50,7 @@ document.getElementById('viewActivityBtn').addEventListener('click', () => setVi
 document.getElementById('viewInsightsBtn').addEventListener('click', () => setView('insights'));
 
 // Drill-in: delegated click on Insights rows → context destination
+// Note: interactive controls inside a drill row (e.g. the Flag-for-triage button) must call e.stopPropagation() so they don't also trigger this row drill.
 document.getElementById('insightsPanel').addEventListener('click', async (e) => {
   const tr = e.target.closest('tr[data-drill]');
   if (!tr) return;
@@ -67,7 +68,7 @@ document.getElementById('insightsPanel').addEventListener('click', async (e) => 
     loadStats();
     setView('activity');
   } else if (d.drill === 'event') {
-    if (d.event) showEventModal(d.event);
+    if (d.event) showEventModal(d.event, [d.event]);
   } else if (d.drill === 'task') {
     if (d.task) showTaskModal(d.task, d.session);
   } else if (d.drill === 'events') {
