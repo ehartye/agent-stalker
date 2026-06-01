@@ -222,4 +222,10 @@ describe("constituent events endpoint", () => {
     const res = handleApiForTest(new URL("http://x/api/insights/events?value=x"), "GET");
     expect(res.status).toBe(400);
   });
+
+  it("invalid by → 400", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/events?by=bogus&value=x"), "GET");
+    expect(res.status).toBe(400);
+  });
 });

@@ -214,18 +214,21 @@ function handleApi(url: URL, method: string): Response {
   if (path === "/api/insights/events") {
     const by = params.get("by");
     if (!by) return jsonResponse({ error: "by is required" }, 400);
+    const ALLOWED = ["file", "tool", "errorCluster", "topic", "retry"] as const;
+    if (!ALLOWED.includes(by as any)) return jsonResponse({ error: "invalid by" }, 400);
     try {
       const result = constituentEvents(db, {
         by: by as any,
         value: params.get("value") ?? "",
         errorsOnly: params.get("errorsOnly") === "1",
         tool: params.get("tool") ?? undefined,
+        // retry's chain session comes from retry_session, kept distinct from the ?session= scope (insightsSessionIds)
         session: params.get("retry_session") ?? undefined,
         sessionIds: insightsSessionIds,
       });
       return jsonResponse(result);
     } catch (e) {
-      return jsonResponse({ error: String(e) }, 400);
+      return jsonResponse({ error: "internal error" }, 500);
     }
   }
 
