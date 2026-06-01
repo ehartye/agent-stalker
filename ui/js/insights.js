@@ -51,7 +51,7 @@ function renderPain(pain) {
   if (!pain || !pain.length) return section('Pain leaderboard', '<p class="empty">No data yet.</p>');
   const rows = pain.slice(0, 20).map(p => `
     <tr>
-      <td class="mono">${esc(p.session_id.slice(0, 8))}</td>
+      <td class="mono">${esc((p.session_id || '').slice(0, 8))}</td>
       <td>${p.score.toFixed(3)}</td>
       <td>${bar(p.breakdown.errorRate)} err</td>
       <td>${bar(p.breakdown.churn)} churn</td>
@@ -66,7 +66,7 @@ function renderPain(pain) {
 function renderTokens(tokens) {
   if (!tokens || !tokens.length) return section('Token usage', '<p class="empty">Run usage ingest (SessionEnd or `bun run ingest-usage`) to populate.</p>');
   const rows = tokens.slice(0, 20).map(t =>
-    `<tr><td class="mono">${esc(t.session_id.slice(0,8))}</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${t.cache_read_input_tokens}</td></tr>`).join('');
+    `<tr><td class="mono">${esc((t.session_id || '').slice(0,8))}</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${t.cache_read_input_tokens}</td></tr>`).join('');
   return section('Token usage',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Input</th><th>Output</th><th>Cache read</th></tr></thead><tbody>${rows}</tbody></table>`);
 }
@@ -82,7 +82,7 @@ function renderChurn(churn) {
 function renderErrors(errors) {
   if (!errors) return section('Errors', '<p class="empty">No data yet.</p>');
   const tool = (errors.byTool || []).slice(0, 10).map(t => `<tr><td>${esc(t.tool_name)}</td><td>${t.errors}</td></tr>`).join('');
-  const sess = (errors.bySession || []).slice(0, 10).map(s => `<tr><td class="mono">${esc(s.session_id.slice(0,8))}</td><td>${s.errors}</td><td>${(s.errorRate*100).toFixed(1)}%</td></tr>`).join('');
+  const sess = (errors.bySession || []).slice(0, 10).map(s => `<tr><td class="mono">${esc((s.session_id || '').slice(0,8))}</td><td>${s.errors}</td><td>${(s.errorRate*100).toFixed(1)}%</td></tr>`).join('');
   return section('Errors',
     `<div class="insights-cols">
        <div><h4>By tool</h4><table class="insights-table"><tbody>${tool}</tbody></table></div>

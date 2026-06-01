@@ -240,7 +240,9 @@ async function runSemanticBatch(): Promise<Response> {
   const analysisDir = resolve(join(import.meta.dir, "..", "analysis"));
   // 1. dependency check
   const check = await new Promise<{ ok: boolean; missing: string[] }>((res) => {
-    const p = spawn(pythonCmd(), ["-m", "agent_stalker_analysis", "check"], { cwd: analysisDir });
+    // stderr is ignored (not piped): we only read stdout, and an unconsumed
+    // stderr pipe can fill its buffer and block the child from exiting.
+    const p = spawn(pythonCmd(), ["-m", "agent_stalker_analysis", "check"], { cwd: analysisDir, stdio: ["ignore", "pipe", "ignore"] });
     let out = "";
     p.stdout.on("data", (d) => (out += d));
     p.on("error", () => res({ ok: false, missing: ["python"] }));
@@ -269,19 +271,28 @@ async function runTriage(sessionId: string): Promise<Response> {
   return await new Promise<Response>((res) => {
     let p;
     try {
-      p = spawn(pythonCmd(), ["-m", "agent_stalker_analysis", "triage", "--session", sessionId], { cwd: analysisDir, env: { ...process.env } });
+      // stderr is ignored (not piped): we only read stdout, and an unconsumed
+      // stderr pipe can fill its buffer and block the child from exiting.
+      p = spawn(pythonCmd(), ["-m", "agent_stalker_analysis", "triage", "--session", sessionId], { cwd: analysisDir, env: { ...process.env }, stdio: ["ignore", "pipe", "ignore"] });
     } catch {
       // spawn can throw synchronously (e.g. AGENT_STALKER_PYTHON points at a
       // non-executable). Surface a clean message rather than rejecting → 500.
       res(jsonResponse({ ok: false, message: "python not available" }, 200));
       return;
     }
+    // Hard backstop: triage makes a live Anthropic API call. If it stalls
+    // (network hang), kill the child so this Promise can't hang indefinitely.
+    const timeout = setTimeout(() => {
+      try { p.kill(); } catch { /* already exited */ }
+      res(jsonResponse({ ok: false, message: "triage timed out" }, 200));
+    }, 60_000);
     let out = "";
     p.stdout.on("data", (d) => (out += d));
     // Covers spawn errors, a non-zero exit, or a Python traceback / partial
     // output on stdout: any of these degrade to a clean { ok:false } message.
-    p.on("error", () => res(jsonResponse({ ok: false, message: "python not available" }, 200)));
+    p.on("error", () => { clearTimeout(timeout); res(jsonResponse({ ok: false, message: "python not available" }, 200)); });
     p.on("close", () => {
+      clearTimeout(timeout);
       try { res(jsonResponse({ ok: true, result: JSON.parse(out) })); }
       catch { res(jsonResponse({ ok: false, message: "triage failed" }, 200)); }
     });
