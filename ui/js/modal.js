@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { esc, syntaxHighlight, taskStatusColor } from './util.js';
 import { fetchJSON } from './api.js';
+import { getEventSummary } from './activity.js';
 
 let modalEventIds = [];
 let modalCurrentIndex = -1;
@@ -111,10 +112,10 @@ export async function copyCurrentEvent() {
   else fail(new Error('clipboard unavailable'));
 }
 
-export async function showEventModal(eventId) {
+export async function showEventModal(eventId, idList) {
   const data = await fetchJSON(`/api/events/${eventId}`);
   if (!data) return;
-  modalEventIds = state.events.map(e => String(e.id));
+  modalEventIds = idList || state.events.map(e => String(e.id));
   modalCurrentIndex = modalEventIds.indexOf(String(eventId));
   renderEventModal(data);
   updateModalNav();
@@ -220,5 +221,34 @@ export async function showTaskModal(taskId, sessionId) {
   }
 
   document.getElementById('modalBody').innerHTML = html;
+  openModal();
+}
+
+export function showEventListModal(title, events, truncated) {
+  document.getElementById('modalPrev').style.display = 'none';
+  document.getElementById('modalNext').style.display = 'none';
+  document.getElementById('modalCopy').style.display = 'none';
+  modalCurrentEvent = null;
+  document.getElementById('modalTitle').textContent = title;
+  const body = document.getElementById('modalBody');
+
+  if (!events || !events.length) {
+    body.innerHTML = '<div style="padding:16px;color:var(--text-dim)">(no events)</div>';
+    openModal();
+    return;
+  }
+  const ids = events.map(e => String(e.id));
+  const note = truncated ? '<div class="triage-hint">Showing the first 500 events.</div>' : '';
+  const rows = events.map(e => `
+    <tr data-event-id="${esc(e.id)}" class="is-drillable">
+      <td class="mono">${esc(new Date(e.timestamp).toLocaleTimeString('en-US', { hour12: false }))}</td>
+      <td>${esc(e.hook_event_name)}</td>
+      <td>${esc(e.tool_name || '')}</td>
+      <td>${esc((getEventSummary(e) || '').slice(0, 80))}</td>
+    </tr>`).join('');
+  body.innerHTML = `${note}<table class="insights-table"><thead><tr><th>Time</th><th>Type</th><th>Tool</th><th>Summary</th></tr></thead><tbody>${rows}</tbody></table>`;
+  body.querySelectorAll('tr[data-event-id]').forEach(tr => {
+    tr.addEventListener('click', () => showEventModal(tr.dataset.eventId, ids));
+  });
   openModal();
 }
