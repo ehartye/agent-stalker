@@ -1,12 +1,12 @@
 import { state } from './state.js';
 import {
-  loadSessions, loadSessionDetails, loadEvents, loadTools, loadStats, pollNewEvents,
+  loadSessions, loadSessionDetails, loadEvents, loadTools, loadStats, pollNewEvents, fetchJSON,
 } from './api.js';
 import { renderSessionDropdown } from './session-picker.js';
 import { renderChipBar } from './chip-bar.js';
 import { renderKanban } from './kanban.js';
 import { renderActivity } from './activity.js';
-import { closeModal, copyCurrentEvent, modalPrev, modalNext } from './modal.js';
+import { closeModal, copyCurrentEvent, modalPrev, modalNext, showEventModal, showTaskModal, showEventListModal } from './modal.js';
 import { renderInsights, applyInsightsSearch } from './insights.js';
 
 // Modal handlers
@@ -48,6 +48,39 @@ function setView(view) {
 }
 document.getElementById('viewActivityBtn').addEventListener('click', () => setView('activity'));
 document.getElementById('viewInsightsBtn').addEventListener('click', () => setView('insights'));
+
+// Drill-in: delegated click on Insights rows → context destination
+document.getElementById('insightsPanel').addEventListener('click', async (e) => {
+  const tr = e.target.closest('tr[data-drill]');
+  if (!tr) return;
+  const d = tr.dataset;
+  if (d.drill === 'session') {
+    if (!d.session) return;
+    state.selectedSessionIds = new Set([d.session]);
+    state.agentFilters.clear();
+    state.toolChipFilters.clear();
+    state.eventTypeFilters.clear();
+    state.eventsFullyLoaded = false;
+    renderSessionDropdown();
+    loadSessionDetails();
+    loadEvents();
+    loadStats();
+    setView('activity');
+  } else if (d.drill === 'event') {
+    if (d.event) showEventModal(d.event);
+  } else if (d.drill === 'task') {
+    if (d.task) showTaskModal(d.task, d.session);
+  } else if (d.drill === 'events') {
+    const p = new URLSearchParams({ by: d.by, value: d.value || '' });
+    if (d.tool) p.set('tool', d.tool);
+    if (d.retrySession) p.set('retry_session', d.retrySession);
+    if (d.errorsOnly) p.set('errorsOnly', '1');
+    const scope = [...state.selectedSessionIds];
+    if (scope.length) p.set('session', scope.join(','));
+    const res = await fetchJSON('/api/insights/events?' + p.toString());
+    showEventListModal(d.drillTitle || 'Events', res?.events || [], res?.truncated);
+  }
+});
 
 // Session dropdown
 document.getElementById('sessionDropdownTrigger').addEventListener('click', () => {
