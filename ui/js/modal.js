@@ -124,6 +124,8 @@ export async function showEventModal(eventId, idList) {
 
 export function renderEventModal(event) {
   modalCurrentEvent = event;
+  document.getElementById('modalPrev').style.display = '';
+  document.getElementById('modalNext').style.display = '';
   const copyBtn = document.getElementById('modalCopy');
   copyBtn.style.display = '';
   copyBtn.textContent = 'Copy';
