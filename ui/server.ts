@@ -221,7 +221,7 @@ function handleApi(url: URL, method: string): Response {
     return jsonResponse(db.query("SELECT * FROM semantic_pivot_signals ORDER BY confidence DESC LIMIT 200").all());
   }
   if (path === "/api/insights/semantic/triage") {
-    return jsonResponse(db.query("SELECT * FROM semantic_session_triage ORDER BY pain_score DESC").all());
+    return jsonResponse(db.query("SELECT * FROM semantic_session_triage ORDER BY COALESCE(analyzed_at, flagged_at) DESC").all());
   }
 
   return jsonResponse({ error: "Not found" }, 404);
@@ -230,6 +230,11 @@ function handleApi(url: URL, method: string): Response {
 /** Test wrapper: invoke the API router without starting a server. */
 export function handleApiForTest(url: URL, method: string): Response {
   return handleApi(url, method);
+}
+
+/** Test wrapper: flag a session for triage without going through the HTTP layer. */
+export function flagTriageForTest(sessionId: string): Response {
+  return flagTriage(sessionId);
 }
 
 function pythonCmd(): string {
@@ -265,46 +270,21 @@ async function runSemanticBatch(): Promise<Response> {
   return jsonResponse({ ok: true, message: "Semantic batch started. Refresh in a minute to see results." });
 }
 
-async function runTriage(sessionId: string): Promise<Response> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return jsonResponse({ ok: false, message: "Set ANTHROPIC_API_KEY to enable triage." }, 200);
-  }
-  const analysisDir = resolve(join(import.meta.dir, "..", "analysis"));
-  return await new Promise<Response>((res) => {
-    let p;
-    try {
-      // stderr is ignored (not piped): we only read stdout, and an unconsumed
-      // stderr pipe can fill its buffer and block the child from exiting.
-      p = spawn(pythonCmd(), ["-m", "agent_stalker_analysis", "triage", "--session", sessionId], { cwd: analysisDir, env: { ...process.env }, stdio: ["ignore", "pipe", "ignore"] });
-    } catch {
-      // spawn can throw synchronously (e.g. AGENT_STALKER_PYTHON points at a
-      // non-executable). Surface a clean message rather than rejecting → 500.
-      res(jsonResponse({ ok: false, message: "python not available" }, 200));
-      return;
-    }
-    // Single-shot resolution guard: a kill-on-timeout and the subsequent child
-    // `close` would otherwise both try to resolve (and `close` would parse the
-    // partial stdout buffered before the kill). `settled` short-circuits that.
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout>;
-    const finish = (r: Response) => { if (settled) return; settled = true; clearTimeout(timeout); res(r); };
-    // Hard backstop: triage makes a live Anthropic API call. If it stalls
-    // (network hang), kill the child so this Promise can't hang indefinitely.
-    timeout = setTimeout(() => {
-      try { p.kill(); } catch { /* already exited */ }
-      finish(jsonResponse({ ok: false, message: "triage timed out" }, 200));
-    }, 60_000);
-    let out = "";
-    p.stdout.on("data", (d) => (out += d));
-    // Covers spawn errors, a non-zero exit, or a Python traceback / partial
-    // output on stdout: any of these degrade to a clean { ok:false } message.
-    p.on("error", () => finish(jsonResponse({ ok: false, message: "python not available" }, 200)));
-    p.on("close", () => {
-      if (settled) return; // already timed out — don't parse partial stdout
-      try { finish(jsonResponse({ ok: true, result: JSON.parse(out) })); }
-      catch { finish(jsonResponse({ ok: false, message: "triage failed" }, 200)); }
-    });
-  });
+function flagTriage(sessionId: string): Response {
+  // No API key, no spawn: just mark the session for triage. The user then runs
+  // the packaged /agent-stalker-triage skill in Claude Code, which reads the
+  // queue (`stalker triage-queue`), analyzes each flagged session, and writes
+  // results back (`stalker triage-save`) — populating the dashboard.
+  const db = getDb();
+  const now = Date.now();
+  db.run(
+    `INSERT INTO semantic_session_triage (session_id, status, flagged_at)
+     VALUES (?, 'flagged', ?)
+     ON CONFLICT(session_id) DO UPDATE SET
+       status='flagged', flagged_at=?, pain_score=NULL, summary=NULL, root_cause=NULL, analyzed_at=NULL`,
+    [sessionId, now, now],
+  );
+  return jsonResponse({ ok: true, message: "Flagged for triage. Run /agent-stalker-triage in Claude Code to analyze it." });
 }
 
 if (import.meta.main) {
@@ -324,7 +304,7 @@ if (import.meta.main) {
       if (url.pathname === "/api/insights/semantic/triage" && req.method === "POST") {
         const sessionId = url.searchParams.get("session");
         if (!sessionId) return jsonResponse({ ok: false, message: "session required" }, 400);
-        return runTriage(sessionId);
+        return flagTriage(sessionId);
       }
 
       if (url.pathname.startsWith("/api/")) {

@@ -219,8 +219,13 @@ function runMigrations(db: Database): void {
       confidence REAL, evidence TEXT
     )`);
     db.run(`CREATE TABLE semantic_session_triage (
-      session_id TEXT PRIMARY KEY, pain_score REAL, summary TEXT, root_cause TEXT,
-      model TEXT, cost_tokens INTEGER, created_at INTEGER
+      session_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'flagged',
+      pain_score INTEGER,
+      summary TEXT,
+      root_cause TEXT,
+      flagged_at INTEGER,
+      analyzed_at INTEGER
     )`);
     db.run("UPDATE schema_version SET version = 7");
   }

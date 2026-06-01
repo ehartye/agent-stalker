@@ -189,9 +189,12 @@ Then click **Enable semantic features** in the Insights view (or run
 refresh to see the **Topics**, **Error clusters**, **Frustration**, and
 **Agent pivots** panels populate.
 
-**LLM triage (further opt-in):** with `ANTHROPIC_API_KEY` set, each pain-leaderboard
-row gets a **Triage** button that asks Claude to summarize the session and propose a
-root cause — one Claude API call per click.
+**Session triage (no API key):** each pain-leaderboard row has a **Flag for triage**
+button. Clicking it marks the session in the database; then run the packaged
+`/agent-stalker-triage` skill in Claude Code, which reads the flagged sessions, scores
+each one's workflow pain, and writes a summary + root cause back so the dashboard's
+**Triage** panel shows them. No Anthropic API key and no token cost — the analysis runs
+in the Claude Code session you're already using.
 
 See [`analysis/README.md`](analysis/README.md) for the full sidecar install/run guide,
 the SQLite contract, and environment variables.

@@ -4,6 +4,9 @@
 .insights-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .insights-table th, .insights-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
 .insights-table .mono { font-family: ui-monospace, monospace; }
+.triage-badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; }
+.triage-badge.pending { background: rgba(251,191,36,.15); color: #fbbf24; }
+.triage-badge.done { background: rgba(52,211,153,.15); color: #34d399; }
 .insights-cols { display: flex; gap: 24px; }
 .insights-cols > div { flex: 1; }
 .pain-bar { display: inline-block; width: 60px; height: 8px; background: rgba(255,255,255,.1); border-radius: 4px; vertical-align: middle; overflow: hidden; }

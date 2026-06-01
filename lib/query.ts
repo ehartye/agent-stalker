@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import type { Database } from "bun:sqlite";
 
 function formatTable(rows: Record<string, any>[], columns?: string[]): string {
   if (rows.length === 0) return "(no results)";
@@ -213,6 +214,67 @@ function cmdStats(args: string[]): string {
   return `Global Stats:\n  Sessions: ${sessionCount.count}\n  Events: ${eventCount.count}\n  Distinct Tools: ${toolCount.count}\n  Agents: ${agentCount.count}\n  Tasks: ${taskCount.count}`;
 }
 
+// Build a compact, human-readable digest of a session for triage analysis.
+// Mirrors the shape an analyst needs: prompts, errors, assistant turns, tools.
+function buildTriageDigest(db: Database, sessionId: string, maxEvents = 120): string {
+  const rows = db.query(
+    "SELECT hook_event_name, tool_name, data FROM events WHERE session_id = ? ORDER BY timestamp ASC LIMIT ?",
+  ).all(sessionId, maxEvents) as Record<string, any>[];
+  const lines: string[] = [];
+  for (const r of rows) {
+    let data: any = {};
+    try { data = r.data ? JSON.parse(r.data) : {}; } catch { /* ignore */ }
+    if (r.hook_event_name === "UserPromptSubmit") {
+      lines.push(`USER: ${String(data.prompt ?? "").slice(0, 300)}`);
+    } else if (r.hook_event_name === "PostToolUseFailure") {
+      lines.push(`ERROR[${r.tool_name}]: ${String(data.error ?? "").slice(0, 200)}`);
+    } else if (r.hook_event_name === "Stop" || r.hook_event_name === "SubagentStop") {
+      if (data.last_assistant_message) lines.push(`ASSISTANT: ${String(data.last_assistant_message).slice(0, 300)}`);
+    } else if (r.tool_name) {
+      lines.push(`TOOL: ${r.tool_name}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function cmdTriageQueue(_args: string[]): string {
+  const db = getDb();
+  const flagged = db.query(
+    "SELECT session_id, flagged_at FROM semantic_session_triage WHERE status = 'flagged' ORDER BY flagged_at ASC",
+  ).all() as Record<string, any>[];
+  if (flagged.length === 0) return "(no sessions flagged for triage)";
+  const out: string[] = [];
+  for (const f of flagged) {
+    out.push(`===== SESSION ${f.session_id} =====`);
+    const digest = buildTriageDigest(db, f.session_id);
+    out.push(digest || "(no digestible events)");
+    out.push("");
+  }
+  out.push(`${flagged.length} session(s) flagged. For each, analyze the digest and save results with:`);
+  out.push(`  stalker triage-save --session <id> --score <1-5> --summary "<one sentence>" --root-cause "<short phrase>"`);
+  return out.join("\n");
+}
+
+function cmdTriageSave(args: string[]): string {
+  const session = getFlag(args, "--session");
+  const score = getFlag(args, "--score");
+  const summary = getFlag(args, "--summary");
+  const rootCause = getFlag(args, "--root-cause");
+  if (!session) return "Usage: triage-save --session <id> --score <1-5> --summary <text> --root-cause <text>";
+  const db = getDb();
+  const now = Date.now();
+  const painScore = score != null ? parseInt(score) : null;
+  db.run(
+    `INSERT INTO semantic_session_triage (session_id, status, pain_score, summary, root_cause, analyzed_at)
+     VALUES (?, 'analyzed', ?, ?, ?, ?)
+     ON CONFLICT(session_id) DO UPDATE SET
+       status='analyzed', pain_score=excluded.pain_score, summary=excluded.summary,
+       root_cause=excluded.root_cause, analyzed_at=excluded.analyzed_at`,
+    [session, painScore, summary ?? null, rootCause ?? null, now],
+  );
+  return `Saved triage for ${session}: pain=${painScore ?? "?"} — ${summary ?? ""}`;
+}
+
 export function runQuery(args: string[]): string {
   const subcommand = args[0];
   switch (subcommand) {
@@ -225,8 +287,10 @@ export function runQuery(args: string[]): string {
     case "tasks": return cmdTasks(args);
     case "task": return cmdTask(args);
     case "stats": return cmdStats(args);
+    case "triage-queue": return cmdTriageQueue(args);
+    case "triage-save": return cmdTriageSave(args);
     default:
-      return `Unknown command: ${subcommand}\n\nAvailable: sessions, session, events, event, tools, agents, tasks, task, stats`;
+      return `Unknown command: ${subcommand}\n\nAvailable: sessions, session, events, event, tools, agents, tasks, task, stats, triage-queue, triage-save`;
   }
 }
 
@@ -234,7 +298,7 @@ export function runQuery(args: string[]): string {
 if (import.meta.main) {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.log("Usage: stalker <command> [options]\n\nCommands: sessions, session, events, event, tools, agents, tasks, task, stats");
+    console.log("Usage: stalker <command> [options]\n\nCommands: sessions, session, events, event, tools, agents, tasks, task, stats, triage-queue, triage-save");
   } else {
     console.log(runQuery(args));
   }

@@ -43,9 +43,10 @@ def run(features: list[str], db_path: str | None = None) -> dict:
                 _set_meta(conn, "pivots", "keyword-1", count, "ok")
                 result["pivots"] = {"count": count}
             elif feature == "triage":
-                # triage is per-session and costs tokens; it is invoked via the
-                # `triage` subcommand, not the batch `run --features` path.
-                msg = "triage is invoked via the `triage` subcommand, not `run --features`"
+                # triage no longer runs in the Python sidecar — it is handled in
+                # Claude Code via the dashboard "Flag for triage" button plus the
+                # /agent-stalker-triage skill (no API key, no cost).
+                msg = "triage is handled in Claude Code via the dashboard flag + /agent-stalker-triage skill, not the Python sidecar"
                 _set_meta(conn, "triage", "", 0, f"skipped: {msg}")
                 result["triage"] = {"error": msg}
             else:

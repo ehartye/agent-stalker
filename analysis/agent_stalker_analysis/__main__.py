@@ -12,9 +12,6 @@ def main(argv=None) -> int:
     run_p = sub.add_parser("run")
     run_p.add_argument("--features", default="sentiment,topics,errors,pivots")
     run_p.add_argument("--db", default=None)
-    triage_p = sub.add_parser("triage")
-    triage_p.add_argument("--session", required=True)
-    triage_p.add_argument("--db", default=None)
     args = parser.parse_args(argv)
 
     if args.command == "check":
@@ -24,12 +21,6 @@ def main(argv=None) -> int:
         from .run import run
         result = run(args.features.split(","), args.db)
         print(json.dumps(result))
-        return 0
-    if args.command == "triage":
-        from .db import connect
-        from .features.triage import run_triage
-        conn = connect(args.db)
-        print(json.dumps(run_triage(conn, args.session)))
         return 0
     return 1
 

@@ -20,7 +20,6 @@ tables in the same database:
 | topics    | prompts + assistant messages + tasks   | `semantic_topics`, `semantic_topic_assignments`           |
 | errors    | `PostToolUseFailure` events            | `semantic_error_clusters`, `semantic_error_assignments`   |
 | pivots    | assistant messages                     | `semantic_pivot_signals` (retry / "try another approach") |
-| triage    | one session's events                   | `semantic_session_triage` (LLM pain summary, opt-in)      |
 
 Run metadata (model, last run time, corpus size, status) is recorded per feature
 in `semantic_meta`.
@@ -29,8 +28,12 @@ in `semantic_meta`.
   even on a minimal install.
 - **topics** and **errors** use sentence-transformer embeddings
   (`all-MiniLM-L6-v2`) with BERTopic and HDBSCAN respectively.
-- **triage** is a second, separately-gated opt-in: it sends one session's digest
-  to the Claude API and therefore costs tokens (see `ANTHROPIC_API_KEY` below).
+
+> **Triage is not part of this sidecar.** Session triage is handled entirely in
+> Claude Code: the dashboard's "Flag for triage" button marks a session
+> (`semantic_session_triage`), and the packaged `agent-stalker-triage` skill reads
+> the flagged sessions and writes back a pain summary — no API key, no token cost,
+> no Python required.
 
 ## SQLite contract
 
@@ -52,7 +55,7 @@ pip install -r requirements.txt
 
 The heavy ML stack (torch via sentence-transformers, BERTopic, HDBSCAN, umap-learn)
 is only needed for the `topics` and `errors` features. `sentiment` and `pivots`
-need only `vaderSentiment`; `triage` needs `anthropic`.
+need only `vaderSentiment`.
 
 Check what is installed without importing the heavy modules (fast — it uses
 `importlib.util.find_spec`, so it never loads torch):
@@ -75,10 +78,6 @@ python -m agent_stalker_analysis check
 python -m agent_stalker_analysis run
 python -m agent_stalker_analysis run --features sentiment,pivots
 python -m agent_stalker_analysis run --db /path/to/agent-stalker.db
-
-# LLM session triage (costs tokens — needs ANTHROPIC_API_KEY)
-python -m agent_stalker_analysis triage --session <session_id>
-python -m agent_stalker_analysis triage --session <session_id> --db /path/to/agent-stalker.db
 ```
 
 `run` accepts any comma-separated subset of `sentiment,topics,errors,pivots`.
@@ -91,9 +90,7 @@ aborting the whole batch.
 | Variable                | Used by            | Purpose                                                                                  |
 |-------------------------|--------------------|------------------------------------------------------------------------------------------|
 | `AGENT_STALKER_DB_PATH` | sidecar + core     | Path to the SQLite database. Defaults to `~/.claude/agent-stalker.db` if unset.           |
-| `ANTHROPIC_API_KEY`     | `triage` only      | Required for LLM triage. Without it, triage is disabled (the dashboard says so).          |
 | `AGENT_STALKER_PYTHON`  | the dashboard      | Python executable the server uses to spawn this sidecar. Defaults to `python` on Windows, `python3` elsewhere. |
-| `AGENT_STALKER_TRIAGE_MODEL` | `triage` only | Override the Claude model used for LLM triage. Defaults to `claude-sonnet-4-6`.        |
 
 ## How the dashboard drives it
 
@@ -105,8 +102,10 @@ You normally don't run these commands by hand. The agent-stalker web dashboard's
 2. spawns `run` in the background to compute the features, and
 3. reads the resulting `semantic_*` tables to render the semantic panels.
 
-The per-session **Triage** button (cost-gated, shown only when `ANTHROPIC_API_KEY`
-is set) drives the `triage` command for a single session.
+Session **triage** is independent of this sidecar — see the `agent-stalker-triage`
+skill (`skills/agent-stalker-triage/`). The dashboard's "Flag for triage" button
+marks a session and the skill, run in Claude Code, analyzes it and writes the
+result back via `stalker triage-save`.
 
 ## Tests
 

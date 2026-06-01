@@ -177,10 +177,21 @@ describe("semantic endpoints", () => {
 
   it("GET /api/insights/semantic/triage returns triage rows", async () => {
     const db = getDb();
-    db.run("INSERT INTO semantic_session_triage (session_id, pain_score, summary, root_cause, created_at) VALUES ('s1', 5, 'rough', 'perms', 1)");
+    db.run("INSERT INTO semantic_session_triage (session_id, status, pain_score, summary, root_cause, analyzed_at) VALUES ('s1', 'analyzed', 5, 'rough', 'perms', 1)");
     const { handleApiForTest } = await import("./server");
     const res = handleApiForTest(new URL("http://x/api/insights/semantic/triage"), "GET");
     const body = await res.json();
     expect(body[0].root_cause).toBe("perms");
+    expect(body[0].status).toBe("analyzed");
+  });
+
+  it("POST /api/insights/semantic/triage flags a session (no API key, no spawn)", async () => {
+    const { flagTriageForTest } = await import("./server");
+    const res = flagTriageForTest("sess-flag");
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    const row = getDb().query("SELECT status, flagged_at FROM semantic_session_triage WHERE session_id = ?").get("sess-flag") as any;
+    expect(row.status).toBe("flagged");
+    expect(row.flagged_at).toBeGreaterThan(0);
   });
 });

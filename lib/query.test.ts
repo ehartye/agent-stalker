@@ -63,6 +63,34 @@ describe("query", () => {
     expect(result).toContain("SessionStart");
   });
 
+  describe("triage queue/save", () => {
+    it("triage-queue lists flagged sessions with a digest; triage-save marks them analyzed", () => {
+      const { getDb } = require("./db");
+      const db = getDb();
+      db.run("INSERT INTO semantic_session_triage (session_id, status, flagged_at) VALUES ('s1','flagged',1)");
+
+      const queue = runQuery(["triage-queue"]);
+      expect(queue).toContain("SESSION s1");
+      expect(queue).toContain("TOOL: Bash"); // digest built from seeded events
+
+      const saved = runQuery(["triage-save", "--session", "s1", "--score", "4", "--summary", "rough run", "--root-cause", "flaky tests"]);
+      expect(saved).toContain("pain=4");
+
+      const row = db.query("SELECT status, pain_score, summary, root_cause FROM semantic_session_triage WHERE session_id='s1'").get() as any;
+      expect(row.status).toBe("analyzed");
+      expect(row.pain_score).toBe(4);
+      expect(row.summary).toBe("rough run");
+      expect(row.root_cause).toBe("flaky tests");
+
+      // once analyzed, it leaves the queue
+      expect(runQuery(["triage-queue"])).toContain("no sessions flagged");
+    });
+
+    it("triage-queue reports empty when nothing is flagged", () => {
+      expect(runQuery(["triage-queue"])).toContain("no sessions flagged");
+    });
+  });
+
   describe("task queries", () => {
     beforeEach(() => {
       // Seed task data via PostToolUse TaskCreate + TaskUpdate

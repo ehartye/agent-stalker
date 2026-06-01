@@ -25,7 +25,7 @@ def test_run_rejects_triage_with_clear_message_and_meta(db, monkeypatch):
     monkeypatch.setattr(run_mod, "connect", lambda _p=None: db)
 
     result = run(["triage"], db_path="ignored")
-    assert "subcommand" in result["triage"]["error"]
+    assert "skill" in result["triage"]["error"]
     meta = list(db.execute("SELECT feature, status FROM semantic_meta WHERE feature='triage'"))
     assert meta and meta[0]["status"].startswith("skipped:")
 

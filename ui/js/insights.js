@@ -10,13 +10,14 @@ export async function renderInsights() {
   if (!panel) return;
   panel.innerHTML = '<div class="insights-loading">Loading insights…</div>';
 
-  const [pain, tokens, errors, churn, thrash, semantic] = await Promise.all([
+  const [pain, tokens, errors, churn, thrash, semantic, triage] = await Promise.all([
     fetchJSON('/api/insights/pain'),
     fetchJSON('/api/insights/tokens'),
     fetchJSON('/api/insights/errors'),
     fetchJSON('/api/insights/churn'),
     fetchJSON('/api/insights/thrash'),
     fetchJSON('/api/insights/semantic/status'),
+    fetchJSON('/api/insights/semantic/triage'),
   ]);
 
   const semanticData = semantic && semantic.available ? await Promise.all([
@@ -29,6 +30,7 @@ export async function renderInsights() {
 
   panel.innerHTML = `
     ${renderPain(pain)}
+    ${renderTriage(triage)}
     ${renderTokens(tokens)}
     ${renderChurn(churn)}
     ${renderErrors(errors)}
@@ -62,11 +64,30 @@ function renderPain(pain) {
       <td>${bar(n.churn)} churn</td>
       <td>${bar(n.thrash)} thrash</td>
       <td>${bar(n.effort)} effort</td>
-      <td><button class="insights-btn triage-btn" data-session="${esc(p.session_id)}">Triage</button></td>
+      <td><button class="insights-btn triage-btn" data-session="${esc(p.session_id)}">Flag for triage</button></td>
     </tr>`;
   }).join('');
   return section('Pain leaderboard',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th colspan="4">Breakdown</th></tr></thead><tbody>${rows}</tbody></table>`);
+}
+
+function renderTriage(rows) {
+  if (!rows || !rows.length) {
+    return section('Triage', '<p class="empty">Click "Flag for triage" on a session above, then run <code>/agent-stalker-triage</code> in Claude Code to analyze flagged sessions.</p>');
+  }
+  const body = rows.slice(0, 20).map(t => {
+    const analyzed = t.status === 'analyzed';
+    const badge = analyzed ? `<span class="triage-badge done">analyzed</span>` : `<span class="triage-badge pending">flagged</span>`;
+    return `<tr>
+      <td class="mono">${esc((t.session_id || '').slice(0, 8))}</td>
+      <td>${badge}</td>
+      <td>${analyzed && t.pain_score != null ? esc(String(t.pain_score)) + '/5' : '—'}</td>
+      <td>${analyzed ? esc(t.summary || '') : ''}</td>
+      <td>${analyzed ? esc(t.root_cause || '') : ''}</td>
+    </tr>`;
+  }).join('');
+  return section('Triage',
+    `<table class="insights-table"><thead><tr><th>Session</th><th>Status</th><th>Pain</th><th>Summary</th><th>Root cause</th></tr></thead><tbody>${body}</tbody></table>`);
 }
 
 function renderTokens(tokens) {
@@ -169,12 +190,15 @@ function wireInsightsButtons() {
   document.querySelectorAll('.triage-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const session = btn.dataset.session;
-      btn.textContent = 'Triaging…';
+      btn.textContent = 'Flagging…';
       const res = await fetch(API + '/api/insights/semantic/triage?session=' + encodeURIComponent(session), { method: 'POST' });
       const body = await res.json().catch(() => ({}));
-      btn.textContent = body.ok && body.result
-        ? `pain ${body.result.pain_score}: ${body.result.root_cause}`
-        : (body.message || 'failed');
+      if (body.ok) {
+        btn.textContent = 'flagged ✓ — run /agent-stalker-triage';
+        btn.disabled = true;
+      } else {
+        btn.textContent = body.message || 'failed';
+      }
     });
   });
 }
