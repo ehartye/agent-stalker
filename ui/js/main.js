@@ -8,6 +8,9 @@ import { renderKanban } from './kanban.js';
 import { renderActivity } from './activity.js';
 import { closeModal, copyCurrentEvent, modalPrev, modalNext, showEventModal, showTaskModal, showEventListModal } from './modal.js';
 import { renderInsights, applyInsightsSearch } from './insights.js';
+import { initTooltips } from './tooltip.js';
+
+initTooltips();
 
 // Modal handlers
 document.getElementById('modalClose').addEventListener('click', closeModal);

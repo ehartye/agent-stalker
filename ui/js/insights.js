@@ -186,8 +186,26 @@ function makeSortable(table) {
   });
 }
 
+// How each section's data points are derived — shown as a hover tooltip on the
+// section header's info marker. Keyed by title so call sites need no change.
+const SECTION_TIPS = {
+  'Pain leaderboard': 'Composite score per session: error rate, file churn, thrash, and effort are each normalized 0–1 across sessions, weighted, and summed. Higher = more troubled.',
+  'Triage': 'Sessions you flagged with "Flag for triage". The /agent-stalker-triage skill (run in Claude Code) scores each one’s pain and writes back a summary + root cause.',
+  'Token usage': 'Real input / output / cache token counts parsed from the Claude Code transcript JSONL files, summed per session.',
+  'File churn': 'Files ranked by how many times they were edited (Edit/Write/MultiEdit), with the number of sessions that touched each and the median time between successive edits.',
+  'Errors': 'Tool calls that failed — a PostToolUseFailure event, or a PostToolUse carrying an error — counted by tool and by session (with each session’s error rate).',
+  'Thrash / pivot-loops': 'Retry chains: repeated calls to the same tool+target by one agent within 2 minutes around a failure. Task bounces: tasks that re-entered a status they had already been in.',
+  'Semantic features': 'Opt-in Python NLP run over user prompts, assistant messages, task subjects, and error text. Results are cached in the database.',
+  'Topics (ranked by pain)': 'BERTopic clusters of the prompt/message/task corpus. "Pain" is the mean session error-rate across a topic’s documents.',
+  'Error clusters': 'Error messages embedded with sentence-transformers and grouped with HDBSCAN; ranked by cluster size and how many sessions they span.',
+  'Frustration (most negative)': 'VADER sentiment scored over user prompts and assistant messages; the most-negative entries are shown.',
+  'Agent pivots (semantic)': 'Assistant messages scored for retry / "that didn’t work, let me try another approach" language. Higher confidence = a stronger pivot signal.',
+};
+
 function section(title, inner) {
-  return `<section class="insights-section"><h3>${esc(title)}</h3>${inner}</section>`;
+  const tip = SECTION_TIPS[title];
+  const info = tip ? ` <span class="info-tip" data-tip="${esc(tip)}">ⓘ</span>` : '';
+  return `<section class="insights-section"><h3>${esc(title)}${info}</h3>${inner}</section>`;
 }
 
 // --- semantic (Phase 3) ---
