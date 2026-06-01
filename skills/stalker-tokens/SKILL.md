@@ -32,9 +32,11 @@ For "how many tokens is this text / file", use the bundled counter:
 # a file
 bun "${CLAUDE_PLUGIN_ROOT}/skills/stalker-tokens/scripts/count-tokens.ts" <path>
 
-# inline text via stdin
+# inline text via stdin (POSIX shell)
 printf '%s' "the text to count" | bun "${CLAUDE_PLUGIN_ROOT}/skills/stalker-tokens/scripts/count-tokens.ts"
 ```
+
+The file-path form is cross-platform. On Windows PowerShell, `printf` is not native — pipe with PowerShell instead (`'the text' | bun "$env:CLAUDE_PLUGIN_ROOT/skills/stalker-tokens/scripts/count-tokens.ts"`) or write the text to a temp file and pass its path.
 
 How it counts (see `scripts/count-tokens.ts`):
 - **Exact** when `ANTHROPIC_API_KEY` is set — it calls Anthropic's `count_tokens` API (free; not billed). Override the model with `AGENT_STALKER_TOKEN_MODEL` (default `claude-sonnet-4-6`).

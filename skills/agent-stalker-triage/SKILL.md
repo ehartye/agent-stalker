@@ -1,6 +1,7 @@
 ---
 name: agent-stalker-triage
 description: Analyze agent-stalker sessions that were flagged for triage in the dashboard. Use when the user runs /agent-stalker-triage, asks to triage flagged sessions, or wants a pain analysis of sessions flagged via the "Flag for triage" button in the agent-stalker Insights dashboard. Reads each flagged session's digest, scores its workflow pain, and writes the result back so the dashboard displays it — no API key required.
+allowed-tools: ["Bash"]
 ---
 
 # Agent Stalker Triage

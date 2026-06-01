@@ -7,7 +7,24 @@ allowed-tools: ["Bash", "Read", "Write"]
 
 # Agent Stalker — Configuration
 
-Manage agent-stalker configuration at `~/.claude/agent-stalker.config.json`. Interpret the user's argument:
+## Config file location
+
+The config file is `AGENT_STALKER_CONFIG_PATH` if that env var is set, otherwise `<home>/.claude/agent-stalker.config.json` (home = `$HOME` or `%USERPROFILE%`). Resolve the real home directory — do not write a literal `~`.
+
+Its shape (matches `lib/config.ts`):
+
+```json
+{
+  "contentRules": { "Bash": { "maxLength": 2000 }, "Read": "metadata", "Edit": "full" },
+  "pausedPaths": ["/abs/path/to/project"]
+}
+```
+
+A `contentRules` value is `"full"`, `"metadata"`, or `{ "maxLength": <n> }`. Preserve any existing keys when editing — read the file, merge, write it back.
+
+## Behavior
+
+Manage the config file above. Interpret the user's argument:
 
 - **`show` (or no argument)** — read and display the current config file. If it does not exist, show the defaults below.
 - **`set <tool> <rule>`** — update the config file:
