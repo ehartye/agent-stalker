@@ -144,6 +144,11 @@ The **Insights** view (toggle in the dashboard header, next to **Activity**) sur
 pockets of high thrash, churn, error, and token usage across your agentic workflows.
 It has two layers.
 
+Every Insights table is sortable (click a column header) and every row drills in —
+sessions open in the Activity view, single prompts/tasks open a detail modal, and
+aggregate rows (a file, tool, error cluster, topic, or retry chain) open a list of
+their underlying events.
+
 ### Structured metrics (always on)
 
 Computed directly from the captured events — no extra setup, no external services:
