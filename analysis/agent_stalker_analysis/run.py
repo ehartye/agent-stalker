@@ -42,7 +42,16 @@ def run(features: list[str], db_path: str | None = None) -> dict:
                 count = run_pivots(conn)
                 _set_meta(conn, "pivots", "keyword-1", count, "ok")
                 result["pivots"] = {"count": count}
+            elif feature == "triage":
+                # triage is per-session and costs tokens; it is invoked via the
+                # `triage` subcommand, not the batch `run --features` path.
+                msg = "triage is invoked via the `triage` subcommand, not `run --features`"
+                _set_meta(conn, "triage", "", 0, f"skipped: {msg}")
+                result["triage"] = {"error": msg}
             else:
+                # Write meta even for unknown features, matching the per-feature
+                # failure-isolation contract (every requested feature gets a status).
+                _set_meta(conn, feature, "", 0, "error: unknown feature")
                 result[feature] = {"error": "unknown feature"}
         except Exception as exc:  # per-feature failure, not all-or-nothing
             _set_meta(conn, feature, "", 0, f"error: {exc}")

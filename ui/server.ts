@@ -282,21 +282,27 @@ async function runTriage(sessionId: string): Promise<Response> {
       res(jsonResponse({ ok: false, message: "python not available" }, 200));
       return;
     }
+    // Single-shot resolution guard: a kill-on-timeout and the subsequent child
+    // `close` would otherwise both try to resolve (and `close` would parse the
+    // partial stdout buffered before the kill). `settled` short-circuits that.
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    const finish = (r: Response) => { if (settled) return; settled = true; clearTimeout(timeout); res(r); };
     // Hard backstop: triage makes a live Anthropic API call. If it stalls
     // (network hang), kill the child so this Promise can't hang indefinitely.
-    const timeout = setTimeout(() => {
+    timeout = setTimeout(() => {
       try { p.kill(); } catch { /* already exited */ }
-      res(jsonResponse({ ok: false, message: "triage timed out" }, 200));
+      finish(jsonResponse({ ok: false, message: "triage timed out" }, 200));
     }, 60_000);
     let out = "";
     p.stdout.on("data", (d) => (out += d));
     // Covers spawn errors, a non-zero exit, or a Python traceback / partial
     // output on stdout: any of these degrade to a clean { ok:false } message.
-    p.on("error", () => { clearTimeout(timeout); res(jsonResponse({ ok: false, message: "python not available" }, 200)); });
+    p.on("error", () => finish(jsonResponse({ ok: false, message: "python not available" }, 200)));
     p.on("close", () => {
-      clearTimeout(timeout);
-      try { res(jsonResponse({ ok: true, result: JSON.parse(out) })); }
-      catch { res(jsonResponse({ ok: false, message: "triage failed" }, 200)); }
+      if (settled) return; // already timed out — don't parse partial stdout
+      try { finish(jsonResponse({ ok: true, result: JSON.parse(out) })); }
+      catch { finish(jsonResponse({ ok: false, message: "triage failed" }, 200)); }
     });
   });
 }

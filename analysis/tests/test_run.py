@@ -18,3 +18,23 @@ def test_run_sentiment_only_updates_meta(db, monkeypatch):
     assert result["sentiment"]["count"] == 1
     meta = list(db.execute("SELECT feature, status FROM semantic_meta WHERE feature='sentiment'"))
     assert meta[0]["status"] == "ok"
+
+
+def test_run_rejects_triage_with_clear_message_and_meta(db, monkeypatch):
+    import agent_stalker_analysis.run as run_mod
+    monkeypatch.setattr(run_mod, "connect", lambda _p=None: db)
+
+    result = run(["triage"], db_path="ignored")
+    assert "subcommand" in result["triage"]["error"]
+    meta = list(db.execute("SELECT feature, status FROM semantic_meta WHERE feature='triage'"))
+    assert meta and meta[0]["status"].startswith("skipped:")
+
+
+def test_run_writes_meta_for_unknown_feature(db, monkeypatch):
+    import agent_stalker_analysis.run as run_mod
+    monkeypatch.setattr(run_mod, "connect", lambda _p=None: db)
+
+    result = run(["bogus"], db_path="ignored")
+    assert result["bogus"]["error"] == "unknown feature"
+    meta = list(db.execute("SELECT feature, status FROM semantic_meta WHERE feature='bogus'"))
+    assert meta and meta[0]["status"] == "error: unknown feature"
