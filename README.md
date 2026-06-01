@@ -108,7 +108,20 @@ Stops the running dashboard server.
 /stalker tasks --status pending # Filter tasks by status
 /stalker agents                # List all spawned agents
 /stalker stats                 # Summary statistics
+/stalker tokens --by model     # Captured token usage
 ```
+
+### Count Tokens
+
+```
+/stalker-tokens --by session   # Real captured token usage (totals + breakdown)
+/stalker-tokens --since 24h    # Usage in a recent window
+/stalker-tokens count <file>   # Tokenize a file (exact with ANTHROPIC_API_KEY, else an estimate)
+```
+
+Real counts come from the `usage` table (parsed from transcripts on `SessionEnd`). Ad-hoc tokenization of arbitrary text/files is exact when `ANTHROPIC_API_KEY` is set (Anthropic's free `count_tokens` API), otherwise a clearly-labelled local estimate.
+
+> **Note:** the commands above are now [skills](skills/) (`/stalker`, `/stalker-ui`, `/stalker-config`, `/stalker-tokens`, `/agent-stalker-triage`) — same invocation, plus contextual auto-triggering.
 
 ### Configure Content Capture
 
