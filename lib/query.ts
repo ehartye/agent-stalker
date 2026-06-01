@@ -275,6 +275,61 @@ function cmdTriageSave(args: string[]): string {
   return `Saved triage for ${session}: pain=${painScore ?? "?"} — ${summary ?? ""}`;
 }
 
+// Report real token usage captured in the `usage` table (parsed from transcripts
+// on SessionEnd). Grand total + a breakdown grouped by session (default), agent,
+// or model. Filters: --session <id>, --since <Nm|Nh|Nd>.
+function cmdTokens(args: string[]): string {
+  const db = getDb();
+  const session = getFlag(args, "--session");
+  const since = getFlag(args, "--since");
+  const by = getFlag(args, "--by") ?? "session";
+
+  const wheres: string[] = ["1=1"];
+  const params: any[] = [];
+  if (session) { wheres.push("u.session_id = ?"); params.push(session); }
+  if (since) {
+    const ms = parseDuration(since);
+    if (ms > 0) { wheres.push("u.timestamp > ?"); params.push(Date.now() - ms); }
+  }
+  const where = wheres.join(" AND ");
+
+  const total = db.query(
+    `SELECT COALESCE(SUM(input_tokens),0) AS input, COALESCE(SUM(output_tokens),0) AS output,
+            COALESCE(SUM(cache_creation_input_tokens),0) AS cache_write,
+            COALESCE(SUM(cache_read_input_tokens),0) AS cache_read
+     FROM usage u WHERE ${where}`,
+  ).get(...params) as Record<string, number>;
+  const grand = total.input + total.output;
+
+  let groupExpr = "u.session_id", label = "session", join = "";
+  if (by === "agent") { groupExpr = "COALESCE(u.agent_id, '(main)')"; label = "agent"; }
+  else if (by === "model") { groupExpr = "COALESCE(s.model, '(unknown)')"; label = "model"; join = "LEFT JOIN sessions s ON s.id = u.session_id"; }
+
+  const rows = db.query(
+    `SELECT ${groupExpr} AS grp,
+            COALESCE(SUM(u.input_tokens),0) AS input,
+            COALESCE(SUM(u.output_tokens),0) AS output,
+            COALESCE(SUM(u.cache_read_input_tokens),0) AS cache_read,
+            COALESCE(SUM(u.input_tokens),0)+COALESCE(SUM(u.output_tokens),0) AS total
+     FROM usage u ${join} WHERE ${where} GROUP BY grp ORDER BY total DESC LIMIT 50`,
+  ).all(...params) as Record<string, any>[];
+
+  if (rows.length === 0) {
+    return "(no token usage recorded — usage is ingested on SessionEnd, or run `bun run ingest-usage`)";
+  }
+
+  const display = rows.map((r) => ({
+    [label]: label === "session" ? String(r.grp).slice(0, 8) : String(r.grp),
+    input: r.input, output: r.output, cache_read: r.cache_read, total: r.total,
+  }));
+
+  const scope = `${session ? ` for ${session.slice(0, 8)}` : ""}${since ? ` (last ${since})` : ""}`;
+  let out = `Token usage${scope}:\n`;
+  out += `  Total: ${grand.toLocaleString()}  (in ${total.input.toLocaleString()} / out ${total.output.toLocaleString()} / cache-read ${total.cache_read.toLocaleString()} / cache-write ${total.cache_write.toLocaleString()})\n\n`;
+  out += `By ${label}:\n` + formatTable(display, [label, "input", "output", "cache_read", "total"]);
+  return out;
+}
+
 export function runQuery(args: string[]): string {
   const subcommand = args[0];
   switch (subcommand) {
@@ -287,10 +342,11 @@ export function runQuery(args: string[]): string {
     case "tasks": return cmdTasks(args);
     case "task": return cmdTask(args);
     case "stats": return cmdStats(args);
+    case "tokens": return cmdTokens(args);
     case "triage-queue": return cmdTriageQueue(args);
     case "triage-save": return cmdTriageSave(args);
     default:
-      return `Unknown command: ${subcommand}\n\nAvailable: sessions, session, events, event, tools, agents, tasks, task, stats, triage-queue, triage-save`;
+      return `Unknown command: ${subcommand}\n\nAvailable: sessions, session, events, event, tools, agents, tasks, task, stats, tokens, triage-queue, triage-save`;
   }
 }
 
@@ -298,7 +354,7 @@ export function runQuery(args: string[]): string {
 if (import.meta.main) {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.log("Usage: stalker <command> [options]\n\nCommands: sessions, session, events, event, tools, agents, tasks, task, stats, triage-queue, triage-save");
+    console.log("Usage: stalker <command> [options]\n\nCommands: sessions, session, events, event, tools, agents, tasks, task, stats, tokens, triage-queue, triage-save");
   } else {
     console.log(runQuery(args));
   }

@@ -91,6 +91,37 @@ describe("query", () => {
     });
   });
 
+  describe("tokens", () => {
+    function seedUsage(uuid: string, opts: Record<string, any>) {
+      const { getDb } = require("./db");
+      getDb().run(
+        `INSERT INTO usage (message_uuid, session_id, agent_id, role, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, timestamp)
+         VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?)`,
+        [uuid, opts.session_id, opts.agent_id ?? null, opts.input ?? 0, opts.output ?? 0, opts.cw ?? 0, opts.cr ?? 0, opts.ts ?? 1000],
+      );
+    }
+
+    it("reports grand total and per-session breakdown", () => {
+      seedUsage("m1", { session_id: "s1", input: 100, output: 40, cr: 5 });
+      seedUsage("m2", { session_id: "s1", agent_id: "ag1", input: 50, output: 20 });
+      const out = runQuery(["tokens"]);
+      expect(out).toContain("Total: 210"); // (100+40)+(50+20)
+      expect(out).toContain("s1");
+    });
+
+    it("--by agent groups by agent (null → main)", () => {
+      seedUsage("m1", { session_id: "s1", agent_id: "ag1", input: 100, output: 40 });
+      seedUsage("m2", { session_id: "s1", input: 50, output: 20 });
+      const out = runQuery(["tokens", "--by", "agent"]);
+      expect(out).toContain("ag1");
+      expect(out).toContain("(main)");
+    });
+
+    it("reports an empty-state message when no usage is recorded", () => {
+      expect(runQuery(["tokens"])).toContain("no token usage");
+    });
+  });
+
   describe("task queries", () => {
     beforeEach(() => {
       // Seed task data via PostToolUse TaskCreate + TaskUpdate
