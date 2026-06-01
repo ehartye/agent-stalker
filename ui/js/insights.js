@@ -44,9 +44,10 @@ export async function renderInsights() {
   wireInsightsButtons();
 }
 
-function bar(frac) {
+function bar(frac, colorVar) {
   const pct = Math.round((frac || 0) * 100);
-  return `<span class="pain-bar"><span class="pain-bar-fill" style="width:${pct}%"></span></span>`;
+  const color = colorVar ? `;background:var(${colorVar})` : '';
+  return `<span class="pain-bar"><span class="pain-bar-fill" style="width:${pct}%${color}"></span></span>`;
 }
 
 function renderPain(pain) {
@@ -54,27 +55,32 @@ function renderPain(pain) {
   const rows = pain.slice(0, 20).map(p => {
     // Render bars from the pre-weight normalized signals (each fills 0..100% on
     // its own scale) so the four signals are visually comparable; the weighted
-    // contributions live in p.breakdown and sum to p.score.
+    // contributions live in p.breakdown and sum to p.score. Each signal is
+    // colour-coded with a system accent.
     const n = p.normalized || p.breakdown;
     return `
     <tr>
       <td class="mono">${esc((p.session_id || '').slice(0, 8))}</td>
-      <td>${p.score.toFixed(3)}</td>
-      <td>${bar(n.errorRate)} err</td>
-      <td>${bar(n.churn)} churn</td>
-      <td>${bar(n.thrash)} thrash</td>
-      <td>${bar(n.effort)} effort</td>
+      <td><span class="pain-score">${p.score.toFixed(3)}</span></td>
+      <td><span class="pain-cell">${bar(n.errorRate, '--accent-red')} err</span></td>
+      <td><span class="pain-cell">${bar(n.churn, '--accent-amber')} churn</span></td>
+      <td><span class="pain-cell">${bar(n.thrash, '--accent-purple')} thrash</span></td>
+      <td><span class="pain-cell">${bar(n.effort, '--accent-blue')} effort</span></td>
       <td><button class="insights-btn triage-btn" data-session="${esc(p.session_id)}">Flag for triage</button></td>
     </tr>`;
   }).join('');
   return section('Pain leaderboard',
-    `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th colspan="4">Breakdown</th></tr></thead><tbody>${rows}</tbody></table>`);
+    `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th colspan="4">Breakdown</th><th></th></tr></thead><tbody>${rows}</tbody></table>`);
 }
 
 function renderTriage(rows) {
   if (!rows || !rows.length) {
-    return section('Triage', '<p class="empty">Click "Flag for triage" on a session above, then run <code>/agent-stalker-triage</code> in Claude Code to analyze flagged sessions.</p>');
+    return section('Triage', '<p class="empty">Flag a session above, then run <code>/agent-stalker-triage</code> in Claude Code to analyze flagged sessions.</p>');
   }
+  const pending = rows.filter(t => t.status !== 'analyzed').length;
+  const hint = pending
+    ? `<div class="triage-hint">${pending} flagged — run <code>/agent-stalker-triage</code> in Claude Code to analyze</div>`
+    : '';
   const body = rows.slice(0, 20).map(t => {
     const analyzed = t.status === 'analyzed';
     const badge = analyzed ? `<span class="triage-badge done">analyzed</span>` : `<span class="triage-badge pending">flagged</span>`;
@@ -87,7 +93,7 @@ function renderTriage(rows) {
     </tr>`;
   }).join('');
   return section('Triage',
-    `<table class="insights-table"><thead><tr><th>Session</th><th>Status</th><th>Pain</th><th>Summary</th><th>Root cause</th></tr></thead><tbody>${body}</tbody></table>`);
+    `${hint}<table class="insights-table"><thead><tr><th>Session</th><th>Status</th><th>Pain</th><th>Summary</th><th>Root cause</th></tr></thead><tbody>${body}</tbody></table>`);
 }
 
 function renderTokens(tokens) {
@@ -133,13 +139,13 @@ function section(title, inner) {
 function renderSemanticSection(status) {
   if (!status || !status.available) {
     return section('Semantic features',
-      `<p class="empty">Opt-in AI analysis (frustration, topics, error clusters). ${status && status.pythonMissing ? 'Python or dependencies not detected.' : ''}</p>
-       <button id="enableSemanticBtn" class="insights-btn">Enable semantic features</button>
+      `<p class="empty">Opt-in AI analysis (frustration, topics, error clusters).${status && status.pythonMissing ? ' Python or dependencies not detected.' : ''}</p>
+       <div class="insights-btn-row"><button id="enableSemanticBtn" class="insights-btn">Enable semantic features</button></div>
        <pre id="semanticStatusOut" class="semantic-status"></pre>`);
   }
   return section('Semantic features',
-    `<p>Last computed: ${status.lastRun ? new Date(status.lastRun).toLocaleString() : 'never'}.</p>
-     <button id="enableSemanticBtn" class="insights-btn">Recompute</button>
+    `<p class="empty">Last computed: ${status.lastRun ? new Date(status.lastRun).toLocaleString() : 'never'}.</p>
+     <div class="insights-btn-row"><button id="enableSemanticBtn" class="insights-btn">Recompute</button></div>
      <pre id="semanticStatusOut" class="semantic-status"></pre>`);
 }
 
@@ -194,7 +200,7 @@ function wireInsightsButtons() {
       const res = await fetch(API + '/api/insights/semantic/triage?session=' + encodeURIComponent(session), { method: 'POST' });
       const body = await res.json().catch(() => ({}));
       if (body.ok) {
-        btn.textContent = 'flagged ✓ — run /agent-stalker-triage';
+        btn.textContent = 'Flagged ✓';
         btn.disabled = true;
       } else {
         btn.textContent = body.message || 'failed';
