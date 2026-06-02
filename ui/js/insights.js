@@ -93,11 +93,11 @@ function renderPain(pain) {
 
 function renderTriage(rows) {
   if (!rows || !rows.length) {
-    return section('Triage', '<p class="empty">Flag a session above, then run <code>/agent-stalker-triage</code> in Claude Code to analyze flagged sessions.</p>');
+    return section('Triage', '<p class="empty">Flag a session above, then run <code>/stalker-triage</code> in Claude Code to analyze flagged sessions.</p>');
   }
   const pending = rows.filter(t => t.status !== 'analyzed').length;
   const hint = pending
-    ? `<div class="triage-hint">${pending} flagged — run <code>/agent-stalker-triage</code> in Claude Code to analyze</div>`
+    ? `<div class="triage-hint">${pending} flagged — run <code>/stalker-triage</code> in Claude Code to analyze</div>`
     : '';
   const body = rows.slice(0, 20).map(t => {
     const analyzed = t.status === 'analyzed';
@@ -190,7 +190,7 @@ function makeSortable(table) {
 // section header's info marker. Keyed by title so call sites need no change.
 const SECTION_TIPS = {
   'Pain leaderboard': 'Composite score per session: error rate, file churn, thrash, and effort are each normalized 0–1 across sessions, weighted, and summed. Higher = more troubled.',
-  'Triage': 'Sessions you flagged with "Flag for triage". The /agent-stalker-triage skill (run in Claude Code) scores each one’s pain and writes back a summary + root cause.',
+  'Triage': 'Sessions you flagged with "Flag for triage". The /stalker-triage skill (run in Claude Code) scores each one’s pain and writes back a summary + root cause.',
   'Token usage': 'Real input / output / cache token counts parsed from the Claude Code transcript JSONL files, summed per session.',
   'File churn': 'Files ranked by how many times they were edited (Edit/Write/MultiEdit), with the number of sessions that touched each and the median time between successive edits.',
   'Errors': 'Tool calls that failed — a PostToolUseFailure event, or a PostToolUse carrying an error — counted by tool and by session (with each session’s error rate).',

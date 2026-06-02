@@ -45,8 +45,8 @@ def run(features: list[str], db_path: str | None = None) -> dict:
             elif feature == "triage":
                 # triage no longer runs in the Python sidecar — it is handled in
                 # Claude Code via the dashboard "Flag for triage" button plus the
-                # /agent-stalker-triage skill (no API key, no cost).
-                msg = "triage is handled in Claude Code via the dashboard flag + /agent-stalker-triage skill, not the Python sidecar"
+                # /stalker-triage skill (no API key, no cost).
+                msg = "triage is handled in Claude Code via the dashboard flag + /stalker-triage skill, not the Python sidecar"
                 _set_meta(conn, "triage", "", 0, f"skipped: {msg}")
                 result["triage"] = {"error": msg}
             else:

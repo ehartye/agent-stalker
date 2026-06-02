@@ -31,7 +31,7 @@ in `semantic_meta`.
 
 > **Triage is not part of this sidecar.** Session triage is handled entirely in
 > Claude Code: the dashboard's "Flag for triage" button marks a session
-> (`semantic_session_triage`), and the packaged `agent-stalker-triage` skill reads
+> (`semantic_session_triage`), and the packaged `stalker-triage` skill reads
 > the flagged sessions and writes back a pain summary — no API key, no token cost,
 > no Python required.
 
@@ -102,8 +102,8 @@ You normally don't run these commands by hand. The agent-stalker web dashboard's
 2. spawns `run` in the background to compute the features, and
 3. reads the resulting `semantic_*` tables to render the semantic panels.
 
-Session **triage** is independent of this sidecar — see the `agent-stalker-triage`
-skill (`skills/agent-stalker-triage/`). The dashboard's "Flag for triage" button
+Session **triage** is independent of this sidecar — see the `stalker-triage`
+skill (`skills/stalker-triage/`). The dashboard's "Flag for triage" button
 marks a session and the skill, run in Claude Code, analyzes it and writes the
 result back via `stalker triage-save`.
 

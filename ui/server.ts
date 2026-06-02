@@ -301,7 +301,7 @@ async function runSemanticBatch(): Promise<Response> {
 
 function flagTriage(sessionId: string): Response {
   // No API key, no spawn: just mark the session for triage. The user then runs
-  // the packaged /agent-stalker-triage skill in Claude Code, which reads the
+  // the packaged /stalker-triage skill in Claude Code, which reads the
   // queue (`stalker triage-queue`), analyzes each flagged session, and writes
   // results back (`stalker triage-save`) — populating the dashboard.
   const db = getDb();
@@ -313,7 +313,7 @@ function flagTriage(sessionId: string): Response {
        status='flagged', flagged_at=?, pain_score=NULL, summary=NULL, root_cause=NULL, analyzed_at=NULL`,
     [sessionId, now, now],
   );
-  return jsonResponse({ ok: true, message: "Flagged for triage. Run /agent-stalker-triage in Claude Code to analyze it." });
+  return jsonResponse({ ok: true, message: "Flagged for triage. Run /stalker-triage in Claude Code to analyze it." });
 }
 
 if (import.meta.main) {

@@ -121,7 +121,7 @@ Stops the running dashboard server.
 
 Real counts come from the `usage` table (parsed from transcripts on `SessionEnd`). Ad-hoc tokenization of arbitrary text/files is exact when `ANTHROPIC_API_KEY` is set (Anthropic's free `count_tokens` API), otherwise a clearly-labelled local estimate.
 
-> **Note:** the commands above are now [skills](skills/) (`/stalker`, `/stalker-ui`, `/stalker-config`, `/stalker-tokens`, `/agent-stalker-triage`) — same invocation, plus contextual auto-triggering.
+> **Note:** the commands above are now [skills](skills/) (`/stalker`, `/stalker-ui`, `/stalker-config`, `/stalker-tokens`, `/stalker-triage`) — same invocation, plus contextual auto-triggering.
 
 ### Configure Content Capture
 
@@ -191,10 +191,11 @@ byte-based proxy.
 ### Semantic sidecar (opt-in)
 
 An optional Python layer adds NLP-based insight: frustration/sentiment, topic
-modeling, error clustering, and semantic pivot detection — plus an LLM-based
-per-session triage. It is **opt-in** and runs as a separate batch process that
-reads the same SQLite database and writes `semantic_*` tables; the dashboard hides
-these panels until they contain data.
+modeling, error clustering, and semantic pivot detection. It is **opt-in** and runs
+as a separate batch process that reads the same SQLite database and writes
+`semantic_*` tables; the dashboard hides these panels until they contain data.
+(Session **triage** is *not* part of this sidecar — it needs no API key and runs in
+Claude Code; see below.)
 
 To enable it, install the Python dependencies once:
 
@@ -209,7 +210,7 @@ refresh to see the **Topics**, **Error clusters**, **Frustration**, and
 
 **Session triage (no API key):** each pain-leaderboard row has a **Flag for triage**
 button. Clicking it marks the session in the database; then run the packaged
-`/agent-stalker-triage` skill in Claude Code, which reads the flagged sessions, scores
+`/stalker-triage` skill in Claude Code, which reads the flagged sessions, scores
 each one's workflow pain, and writes a summary + root cause back so the dashboard's
 **Triage** panel shows them. No Anthropic API key and no token cost — the analysis runs
 in the Claude Code session you're already using.
