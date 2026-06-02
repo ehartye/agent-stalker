@@ -65,6 +65,18 @@ document.getElementById('insightsPanel').addEventListener('click', async (e) => 
     state.toolChipFilters.clear();
     state.eventTypeFilters.clear();
     state.eventsFullyLoaded = false;
+    // The Insights leaderboards can surface sessions beyond the picker's initially
+    // loaded set (it caps at 100 active + 100 archived). If the drilled session
+    // isn't loaded, fetch it and add it so the picker has a row to show as checked.
+    const known = state.activeSessions.some(s => s.id === d.session)
+      || state.archivedSessions.some(s => s.id === d.session);
+    if (!known) {
+      const r = await fetchJSON('/api/sessions/' + encodeURIComponent(d.session));
+      if (r && r.session) {
+        if (r.session.archived_at) state.archivedSessions = [r.session, ...state.archivedSessions];
+        else state.activeSessions = [r.session, ...state.activeSessions];
+      }
+    }
     renderSessionDropdown();
     // If the drilled session is archived, expand the (collapsed-by-default)
     // archived group so its now-checked row is visible in the picker.
