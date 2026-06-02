@@ -66,6 +66,12 @@ document.getElementById('insightsPanel').addEventListener('click', async (e) => 
     state.eventTypeFilters.clear();
     state.eventsFullyLoaded = false;
     renderSessionDropdown();
+    // If the drilled session is archived, expand the (collapsed-by-default)
+    // archived group so its now-checked row is visible in the picker.
+    if (state.archivedSessions.some(s => s.id === d.session)) {
+      document.getElementById('archivedGroupHeader').classList.remove('collapsed');
+      document.getElementById('archivedSessionList').classList.remove('collapsed');
+    }
     loadSessionDetails();
     loadEvents();
     loadStats();
