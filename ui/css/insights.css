@@ -289,9 +289,22 @@
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.03em;
-  max-width: 240px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+/* Root cause beside the score badge: single line, clean ellipsis when it
+   overflows; the full text (and the summary) live on the hover title. */
+.triage-rc {
+  display: inline-block;
+  max-width: 300px;
+  margin-left: 8px;
+  vertical-align: middle;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 .triage-pill.pending  { background: var(--amber-dim); color: var(--amber-light); border: 1px solid var(--amber-glow); }
 .triage-pill.analyzed { background: var(--accent-green-dim); color: var(--accent-green); border: 1px solid rgba(52, 211, 153, 0.25); }

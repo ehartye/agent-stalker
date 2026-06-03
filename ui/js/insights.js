@@ -136,8 +136,10 @@ function triageCell(sessionId, triageBy) {
   if (!t) return `<button class="insights-btn triage-btn" data-session="${esc(sessionId)}">Flag for triage</button>`;
   if (t.status === 'analyzed') {
     const score = t.pain_score != null ? esc(String(t.pain_score)) + '/5' : '—';
-    const rc = t.root_cause ? ' · ' + esc(t.root_cause) : '';
-    return `<span class="triage-pill analyzed" title="${esc(t.summary || '')}">⚑ ${score}${rc}</span>`;
+    // Keep the score in a compact coloured badge; render the root cause as
+    // adjacent text that wraps and shows in full (summary stays on hover).
+    const rc = t.root_cause ? `<span class="triage-rc" title="${esc(t.summary || '')}">${esc(t.root_cause)}</span>` : '';
+    return `<span class="triage-pill analyzed" title="${esc(t.summary || '')}">⚑ ${score}</span>${rc}`;
   }
   return `<span class="triage-pill pending" title="Run /stalker-triage in Claude Code to analyze this session">⚑ flagged · awaiting</span>`;
 }
