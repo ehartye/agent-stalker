@@ -1,6 +1,33 @@
 /* Session picker (dropdown anchored to header button) */
 .session-picker {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Clear-selection button — shown (via .visible) only when a session is selected */
+.session-clear-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.session-clear-btn.visible { display: inline-flex; }
+.session-clear-btn:hover {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+  background: var(--accent-red-dim);
 }
 .session-picker-btn {
   display: flex;

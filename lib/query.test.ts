@@ -7,9 +7,10 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 describe("query", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-query-${Date.now()}.db`);
+  let testDbPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-query-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
     // Seed data
     ingestEvent({ hook_event_name: "SessionStart", session_id: "s1", cwd: "/project-a", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
@@ -61,6 +62,65 @@ describe("query", () => {
   it("shows event detail", () => {
     const result = runQuery(["event", "1"]);
     expect(result).toContain("SessionStart");
+  });
+
+  describe("triage queue/save", () => {
+    it("triage-queue lists flagged sessions with a digest; triage-save marks them analyzed", () => {
+      const { getDb } = require("./db");
+      const db = getDb();
+      db.run("INSERT INTO semantic_session_triage (session_id, status, flagged_at) VALUES ('s1','flagged',1)");
+
+      const queue = runQuery(["triage-queue"]);
+      expect(queue).toContain("SESSION s1");
+      expect(queue).toContain("TOOL: Bash"); // digest built from seeded events
+
+      const saved = runQuery(["triage-save", "--session", "s1", "--score", "4", "--summary", "rough run", "--root-cause", "flaky tests"]);
+      expect(saved).toContain("pain=4");
+
+      const row = db.query("SELECT status, pain_score, summary, root_cause FROM semantic_session_triage WHERE session_id='s1'").get() as any;
+      expect(row.status).toBe("analyzed");
+      expect(row.pain_score).toBe(4);
+      expect(row.summary).toBe("rough run");
+      expect(row.root_cause).toBe("flaky tests");
+
+      // once analyzed, it leaves the queue
+      expect(runQuery(["triage-queue"])).toContain("no sessions flagged");
+    });
+
+    it("triage-queue reports empty when nothing is flagged", () => {
+      expect(runQuery(["triage-queue"])).toContain("no sessions flagged");
+    });
+  });
+
+  describe("tokens", () => {
+    function seedUsage(uuid: string, opts: Record<string, any>) {
+      const { getDb } = require("./db");
+      getDb().run(
+        `INSERT INTO usage (message_uuid, session_id, agent_id, role, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, timestamp)
+         VALUES (?, ?, ?, 'assistant', ?, ?, ?, ?, ?)`,
+        [uuid, opts.session_id, opts.agent_id ?? null, opts.input ?? 0, opts.output ?? 0, opts.cw ?? 0, opts.cr ?? 0, opts.ts ?? 1000],
+      );
+    }
+
+    it("reports grand total and per-session breakdown", () => {
+      seedUsage("m1", { session_id: "s1", input: 100, output: 40, cr: 5 });
+      seedUsage("m2", { session_id: "s1", agent_id: "ag1", input: 50, output: 20 });
+      const out = runQuery(["tokens"]);
+      expect(out).toContain("Total: 210"); // (100+40)+(50+20)
+      expect(out).toContain("s1");
+    });
+
+    it("--by agent groups by agent (null → main)", () => {
+      seedUsage("m1", { session_id: "s1", agent_id: "ag1", input: 100, output: 40 });
+      seedUsage("m2", { session_id: "s1", input: 50, output: 20 });
+      const out = runQuery(["tokens", "--by", "agent"]);
+      expect(out).toContain("ag1");
+      expect(out).toContain("(main)");
+    });
+
+    it("reports an empty-state message when no usage is recorded", () => {
+      expect(runQuery(["tokens"])).toContain("no token usage");
+    });
   });
 
   describe("task queries", () => {

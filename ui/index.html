@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="/css/kanban.css">
 <link rel="stylesheet" href="/css/activity.css">
 <link rel="stylesheet" href="/css/modal.css">
+<link rel="stylesheet" href="/css/insights.css">
+<link rel="stylesheet" href="/css/tooltip.css">
 </head>
 <body>
 <div id="app">
@@ -24,6 +26,7 @@
         <span id="sessionDropdownLabel">No sessions</span>
         <span class="chevron">&#9662;</span>
       </button>
+      <button class="session-clear-btn" id="sessionClearBtn" type="button" title="Clear session selection" aria-label="Clear session selection">&times;</button>
       <div class="session-dropdown-panel" id="sessionDropdownPanel">
         <div class="session-search">
           <input type="text" id="sessionSearchInput" placeholder="Search sessions..." autocomplete="off">
@@ -47,6 +50,10 @@
       <input type="text" id="searchInput" placeholder="Search events..." autocomplete="off">
     </div>
     <div class="header-controls">
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-btn active" data-view="activity" id="viewActivityBtn">Activity</button>
+        <button class="view-btn" data-view="insights" id="viewInsightsBtn">Insights</button>
+      </div>
       <div class="live-indicator" id="liveToggle" title="Toggle auto-refresh">
         <span class="live-dot"></span>
         <span id="liveLabel">LIVE</span>
@@ -61,6 +68,7 @@
   <div class="content">
     <div class="content-panel" id="kanbanPanel"></div>
     <div class="content-panel" id="activityPanel"></div>
+    <div class="content-panel" id="insightsPanel" style="display:none"></div>
   </div>
 
   <footer class="footer">

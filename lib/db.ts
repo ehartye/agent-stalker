@@ -18,6 +18,33 @@ function runMigrations(db: Database): void {
     )
   `);
 
+  // Run the whole ladder under BEGIN IMMEDIATE so the write lock is held before
+  // the version is read: concurrent hook processes that open a not-yet-migrated
+  // DB serialize on the migrate-or-skip decision instead of racing into the same
+  // CREATE TABLE, and each migration's version bump commits atomically with its
+  // DDL (an interrupted run rolls back cleanly instead of wedging the next one).
+  // Explicit BEGIN/COMMIT via db.run (not db.transaction(), whose cached
+  // BEGIN/COMMIT statements can keep the DB file locked after close on Windows).
+  db.run("BEGIN IMMEDIATE");
+  try {
+    applyMigrations(db);
+    db.run("COMMIT");
+  } catch (e) {
+    db.run("ROLLBACK");
+    throw e;
+  }
+}
+
+function applyMigrations(db: Database): void {
+  // Collapse any duplicate rows left by an older (pre-transaction) concurrent
+  // init, keeping the highest version, so the gate reads one authoritative value.
+  const versions = db.query("SELECT version FROM schema_version").all() as { version: number }[];
+  if (versions.length > 1) {
+    const max = Math.max(...versions.map((v) => v.version));
+    db.run("DELETE FROM schema_version");
+    db.run("INSERT INTO schema_version (version) VALUES (?)", [max]);
+  }
+
   const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number } | null;
   const currentVersion = row?.version ?? 0;
 
@@ -175,6 +202,59 @@ function runMigrations(db: Database): void {
     db.run("DROP TABLE tasks");
     db.run("ALTER TABLE tasks_v3 RENAME TO tasks");
     db.run("UPDATE schema_version SET version = 5");
+  }
+
+  if (currentVersion < 6) {
+    db.run("ALTER TABLE sessions ADD COLUMN transcript_path TEXT");
+    db.run(`CREATE TABLE usage (
+      message_uuid TEXT PRIMARY KEY,
+      session_id TEXT,
+      agent_id TEXT,
+      role TEXT,
+      input_tokens INTEGER,
+      cache_creation_input_tokens INTEGER,
+      cache_read_input_tokens INTEGER,
+      output_tokens INTEGER,
+      timestamp INTEGER
+    )`);
+    db.run("CREATE INDEX idx_usage_session_id ON usage(session_id)");
+    db.run("UPDATE schema_version SET version = 6");
+  }
+
+  if (currentVersion < 7) {
+    db.run(`CREATE TABLE semantic_meta (
+      feature TEXT PRIMARY KEY, version TEXT, model TEXT, last_run_at INTEGER, corpus_size INTEGER, status TEXT
+    )`);
+    db.run(`CREATE TABLE semantic_sentiment (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, source_kind TEXT, event_id INTEGER, session_id TEXT,
+      score REAL, label TEXT, timestamp INTEGER
+    )`);
+    db.run(`CREATE TABLE semantic_topics (
+      topic_id INTEGER PRIMARY KEY, label TEXT, keywords TEXT, size INTEGER, pain_score REAL
+    )`);
+    db.run(`CREATE TABLE semantic_topic_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, doc_id TEXT, session_id TEXT, topic_id INTEGER, prob REAL
+    )`);
+    db.run(`CREATE TABLE semantic_error_clusters (
+      cluster_id INTEGER PRIMARY KEY, label TEXT, exemplar TEXT, size INTEGER, session_spread INTEGER
+    )`);
+    db.run(`CREATE TABLE semantic_error_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER, session_id TEXT, cluster_id INTEGER
+    )`);
+    db.run(`CREATE TABLE semantic_pivot_signals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, window_start INTEGER, window_end INTEGER,
+      confidence REAL, evidence TEXT
+    )`);
+    db.run(`CREATE TABLE semantic_session_triage (
+      session_id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'flagged',
+      pain_score INTEGER,
+      summary TEXT,
+      root_cause TEXT,
+      flagged_at INTEGER,
+      analyzed_at INTEGER
+    )`);
+    db.run("UPDATE schema_version SET version = 7");
   }
 }
 

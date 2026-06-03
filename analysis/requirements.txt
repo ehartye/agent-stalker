@@ -1,0 +1,5 @@
+sentence-transformers>=2.2
+bertopic>=0.16
+hdbscan>=0.8.33
+umap-learn>=0.5
+vaderSentiment>=3.3

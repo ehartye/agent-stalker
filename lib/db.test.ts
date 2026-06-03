@@ -5,9 +5,10 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 describe("db", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-test-${Date.now()}.db`);
+  let testDbPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
   });
 
@@ -143,10 +144,81 @@ describe("db", () => {
       expect(colNames).toContain("color");
     });
 
-    it("schema_version is 5", () => {
+    it("schema_version is at least 5", () => {
       const db = getDb();
       const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
-      expect(row.version).toBe(5);
+      expect(row.version).toBeGreaterThanOrEqual(5);
+    });
+  });
+
+  describe("v6 migration", () => {
+    it("sessions table has transcript_path column", () => {
+      const db = getDb();
+      const cols = db.query("PRAGMA table_info(sessions)").all() as { name: string }[];
+      expect(cols.map((c) => c.name)).toContain("transcript_path");
+    });
+
+    it("creates usage table with token columns", () => {
+      const db = getDb();
+      const tables = db.query("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+      expect(tables.map((t) => t.name)).toContain("usage");
+      const cols = db.query("PRAGMA table_info(usage)").all() as { name: string }[];
+      const names = cols.map((c) => c.name);
+      expect(names).toContain("message_uuid");
+      expect(names).toContain("session_id");
+      expect(names).toContain("agent_id");
+      expect(names).toContain("input_tokens");
+      expect(names).toContain("cache_creation_input_tokens");
+      expect(names).toContain("cache_read_input_tokens");
+      expect(names).toContain("output_tokens");
+    });
+
+    it("schema_version is at least 6", () => {
+      const db = getDb();
+      const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
+      expect(row.version).toBeGreaterThanOrEqual(6);
+    });
+  });
+
+  describe("v7 migration", () => {
+    const semanticTables = [
+      "semantic_meta", "semantic_sentiment", "semantic_topics",
+      "semantic_topic_assignments", "semantic_error_clusters",
+      "semantic_error_assignments", "semantic_pivot_signals", "semantic_session_triage",
+    ];
+    it("creates all semantic_* tables (empty)", () => {
+      const db = getDb();
+      const names = (db.query("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map(t => t.name);
+      for (const t of semanticTables) expect(names).toContain(t);
+    });
+    it("schema_version is at least 7", () => {
+      const db = getDb();
+      const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number };
+      expect(row.version).toBeGreaterThanOrEqual(7);
+    });
+  });
+
+  describe("migration robustness", () => {
+    it("keeps exactly one schema_version row after init", () => {
+      const db = getDb();
+      const rows = db.query("SELECT version FROM schema_version").all() as { version: number }[];
+      expect(rows.length).toBe(1);
+    });
+
+    it("collapses duplicate schema_version rows to the highest version", () => {
+      // An older (pre-transaction) concurrent init could leave more than one
+      // row; the immediate-transaction dedup pass must normalize to a single
+      // authoritative version on the next open.
+      const db1 = getDb();
+      const v = (db1.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number }).version;
+      db1.run("INSERT INTO schema_version (version) VALUES (?)", [v - 1]); // stray duplicate
+      expect((db1.query("SELECT COUNT(*) c FROM schema_version").get() as { c: number }).c).toBe(2);
+      closeDb();
+
+      const db2 = getDb(); // reopen → dedup runs
+      const rows = db2.query("SELECT version FROM schema_version").all() as { version: number }[];
+      expect(rows.length).toBe(1);
+      expect(rows[0].version).toBe(v);
     });
   });
 

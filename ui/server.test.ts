@@ -3,11 +3,13 @@ import { getDb, closeDb } from "../lib/db";
 import { unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { seedSession, seedToolFailure, seedToolCall } from "../lib/analytics/test-helpers";
 
 describe("server API", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-server-test-${Date.now()}.db`);
+  let testDbPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-server-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
     const db = getDb();
     // Seed test sessions
@@ -97,5 +99,141 @@ describe("server API", () => {
 
     // Expected order: sess-1 (latest event 3000) > sess-2 (started_at 2000, no events) > sess-3 (started_at 500, no events)
     expect(rows.map(r => r.id)).toEqual(["sess-1", "sess-2", "sess-3"]);
+  });
+});
+
+describe("insights endpoints", () => {
+  let testDbPath: string;
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-server-insights-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+    seedSession("s1");
+    seedToolFailure("s1", "Edit", { file_path: "/a.ts" });
+    seedToolCall("s1", "Edit", { file_path: "/a.ts" });
+  });
+  afterEach(() => {
+    closeDb();
+    for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }
+    delete process.env.AGENT_STALKER_DB_PATH;
+  });
+
+  it("GET /api/insights/pain returns a ranked leaderboard", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/pain"), "GET");
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body[0]).toHaveProperty("session_id");
+    expect(body[0]).toHaveProperty("score");
+    expect(body[0]).toHaveProperty("breakdown");
+  });
+
+  it("GET /api/insights/errors returns per-session and per-tool stats", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/errors"), "GET");
+    const body = await res.json();
+    expect(body).toHaveProperty("bySession");
+    expect(body).toHaveProperty("byTool");
+  });
+
+  it("GET /api/insights/tokens returns per-session token totals", async () => {
+    const db = getDb();
+    db.run("INSERT INTO sessions (id, started_at) VALUES ('st', 1)");
+    db.run(`INSERT INTO usage (message_uuid, session_id, input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens)
+            VALUES ('m1','st',100,40,10,5)`);
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/tokens"), "GET");
+    const body = await res.json();
+    const row = body.find((r: any) => r.session_id === "st");
+    expect(row.input_tokens).toBe(100);
+    expect(row.output_tokens).toBe(40);
+  });
+});
+
+describe("semantic endpoints", () => {
+  let testDbPath: string;
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-server-sem-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+  });
+  afterEach(() => {
+    closeDb();
+    for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }
+    delete process.env.AGENT_STALKER_DB_PATH;
+  });
+
+  it("GET /api/insights/semantic/status reports availability from semantic_meta", async () => {
+    const db = getDb();
+    db.run("INSERT INTO semantic_meta (feature, last_run_at, status) VALUES ('sentiment', 123, 'ok')");
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/semantic/status"), "GET");
+    const body = await res.json();
+    expect(body.available).toBe(true);
+    expect(body.lastRun).toBe(123);
+  });
+
+  it("GET /api/insights/semantic/sentiment returns rows", async () => {
+    const db = getDb();
+    db.run("INSERT INTO semantic_sentiment (source_kind, session_id, score, label) VALUES ('prompt','s1',-0.8,'negative')");
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/semantic/sentiment"), "GET");
+    const body = await res.json();
+    expect(body[0].label).toBe("negative");
+  });
+
+  it("GET /api/insights/semantic/triage returns triage rows", async () => {
+    const db = getDb();
+    db.run("INSERT INTO semantic_session_triage (session_id, status, pain_score, summary, root_cause, analyzed_at) VALUES ('s1', 'analyzed', 5, 'rough', 'perms', 1)");
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/semantic/triage"), "GET");
+    const body = await res.json();
+    expect(body[0].root_cause).toBe("perms");
+    expect(body[0].status).toBe("analyzed");
+  });
+
+  it("POST /api/insights/semantic/triage flags a session (no API key, no spawn)", async () => {
+    const { flagTriageForTest } = await import("./server");
+    const res = flagTriageForTest("sess-flag");
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    const row = getDb().query("SELECT status, flagged_at FROM semantic_session_triage WHERE session_id = ?").get("sess-flag") as any;
+    expect(row.status).toBe("flagged");
+    expect(row.flagged_at).toBeGreaterThan(0);
+  });
+});
+
+describe("constituent events endpoint", () => {
+  let testDbPath: string;
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-server-eventsby-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+  });
+  afterEach(() => {
+    closeDb();
+    for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }
+    delete process.env.AGENT_STALKER_DB_PATH;
+  });
+
+  it("GET /api/insights/events?by=tool&value=Bash&errorsOnly=1 returns failures", async () => {
+    seedSession("s1");
+    seedToolFailure("s1", "Bash", { command: "bad" });
+    seedToolCall("s1", "Bash", { command: "ok" });
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/events?by=tool&value=Bash&errorsOnly=1"), "GET");
+    const body = await res.json();
+    expect(body.events.length).toBe(1);
+    expect(body.events[0].hook_event_name).toBe("PostToolUseFailure");
+    expect(body.truncated).toBe(false);
+  });
+
+  it("missing by → 400", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/events?value=x"), "GET");
+    expect(res.status).toBe(400);
+  });
+
+  it("invalid by → 400", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/insights/events?by=bogus&value=x"), "GET");
+    expect(res.status).toBe(400);
   });
 });

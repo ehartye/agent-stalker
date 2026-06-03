@@ -1,12 +1,16 @@
 import { state } from './state.js';
 import {
-  loadSessions, loadSessionDetails, loadEvents, loadTools, loadStats, pollNewEvents,
+  loadSessions, loadSessionDetails, loadEvents, loadTools, loadStats, pollNewEvents, fetchJSON,
 } from './api.js';
-import { renderSessionDropdown } from './session-picker.js';
+import { renderSessionDropdown, clearSessionSelection } from './session-picker.js';
 import { renderChipBar } from './chip-bar.js';
 import { renderKanban } from './kanban.js';
 import { renderActivity } from './activity.js';
-import { closeModal, copyCurrentEvent, modalPrev, modalNext } from './modal.js';
+import { closeModal, copyCurrentEvent, modalPrev, modalNext, showEventModal, showTaskModal, showEventListModal } from './modal.js';
+import { renderInsights, applyInsightsSearch } from './insights.js';
+import { initTooltips } from './tooltip.js';
+
+initTooltips();
 
 // Modal handlers
 document.getElementById('modalClose').addEventListener('click', closeModal);
@@ -17,10 +21,11 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 document.getElementById('modalPrev').addEventListener('click', modalPrev);
 document.getElementById('modalNext').addEventListener('click', modalNext);
 
-// Search
+// Search — filters the active view (Activity event stream, or Insights tables)
 document.getElementById('searchInput').addEventListener('input', e => {
   state.searchText = e.target.value;
-  renderActivity();
+  if (state.currentView === 'insights') applyInsightsSearch();
+  else renderActivity();
 });
 
 // Live toggle
@@ -30,9 +35,84 @@ document.getElementById('liveToggle').addEventListener('click', () => {
   document.getElementById('liveLabel').textContent = state.isLive ? 'LIVE' : 'PAUSED';
 });
 
+// View toggle (Activity <-> Insights)
+function setView(view) {
+  const isInsights = view === 'insights';
+  state.currentView = view;
+  document.getElementById('kanbanPanel').style.display = isInsights ? 'none' : '';
+  document.getElementById('activityPanel').style.display = isInsights ? 'none' : '';
+  document.getElementById('insightsPanel').style.display = isInsights ? '' : 'none';
+  // The chip bar holds Activity-only filters (tools/agents/event types) and just
+  // steals vertical space on Insights — hide it there.
+  document.getElementById('chipBar').style.display = isInsights ? 'none' : '';
+  document.getElementById('viewActivityBtn').classList.toggle('active', !isInsights);
+  document.getElementById('viewInsightsBtn').classList.toggle('active', isInsights);
+  if (isInsights) renderInsights();
+}
+document.getElementById('viewActivityBtn').addEventListener('click', () => setView('activity'));
+document.getElementById('viewInsightsBtn').addEventListener('click', () => setView('insights'));
+
+// Drill-in: delegated click on Insights rows → context destination
+// Note: interactive controls inside a drill row (e.g. the Flag-for-triage button) must call e.stopPropagation() so they don't also trigger this row drill.
+document.getElementById('insightsPanel').addEventListener('click', async (e) => {
+  const tr = e.target.closest('tr[data-drill]');
+  if (!tr) return;
+  const d = tr.dataset;
+  if (d.drill === 'session') {
+    if (!d.session) return;
+    state.selectedSessionIds = new Set([d.session]);
+    state.agentFilters.clear();
+    state.toolChipFilters.clear();
+    state.eventTypeFilters.clear();
+    state.eventsFullyLoaded = false;
+    // The Insights leaderboards can surface sessions beyond the picker's initially
+    // loaded set (it caps at 100 active + 100 archived). If the drilled session
+    // isn't loaded, fetch it and add it so the picker has a row to show as checked.
+    const known = state.activeSessions.some(s => s.id === d.session)
+      || state.archivedSessions.some(s => s.id === d.session);
+    if (!known) {
+      const r = await fetchJSON('/api/sessions/' + encodeURIComponent(d.session));
+      if (r && r.session) {
+        if (r.session.archived_at) state.archivedSessions = [r.session, ...state.archivedSessions];
+        else state.activeSessions = [r.session, ...state.activeSessions];
+      }
+    }
+    renderSessionDropdown();
+    // If the drilled session is archived, expand the (collapsed-by-default)
+    // archived group so its now-checked row is visible in the picker.
+    if (state.archivedSessions.some(s => s.id === d.session)) {
+      document.getElementById('archivedGroupHeader').classList.remove('collapsed');
+      document.getElementById('archivedSessionList').classList.remove('collapsed');
+    }
+    loadSessionDetails();
+    loadEvents();
+    loadStats();
+    setView('activity');
+  } else if (d.drill === 'event') {
+    if (d.event) showEventModal(d.event, [d.event]);
+  } else if (d.drill === 'task') {
+    if (d.task) showTaskModal(d.task, d.session);
+  } else if (d.drill === 'events') {
+    const p = new URLSearchParams({ by: d.by, value: d.value || '' });
+    if (d.tool) p.set('tool', d.tool);
+    if (d.retrySession) p.set('retry_session', d.retrySession);
+    if (d.errorsOnly) p.set('errorsOnly', '1');
+    const scope = [...state.selectedSessionIds];
+    if (scope.length) p.set('session', scope.join(','));
+    const res = await fetchJSON('/api/insights/events?' + p.toString());
+    showEventListModal(d.drillTitle || 'Events', res?.events || [], res?.truncated);
+  }
+});
+
 // Session dropdown
 document.getElementById('sessionDropdownTrigger').addEventListener('click', () => {
   document.getElementById('sessionDropdownPanel').classList.toggle('open');
+});
+// Clear-(x) button beside the picker — wipes the session selection
+document.getElementById('sessionClearBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('sessionDropdownPanel').classList.remove('open');
+  clearSessionSelection();
 });
 document.addEventListener('click', (e) => {
   const panel = document.getElementById('sessionDropdownPanel');

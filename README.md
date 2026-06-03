@@ -108,7 +108,20 @@ Stops the running dashboard server.
 /stalker tasks --status pending # Filter tasks by status
 /stalker agents                # List all spawned agents
 /stalker stats                 # Summary statistics
+/stalker tokens --by model     # Captured token usage
 ```
+
+### Count Tokens
+
+```
+/stalker-tokens --by session   # Real captured token usage (totals + breakdown)
+/stalker-tokens --since 24h    # Usage in a recent window
+/stalker-tokens count <file>   # Tokenize a file (exact with ANTHROPIC_API_KEY, else an estimate)
+```
+
+Real counts come from the `usage` table (parsed from transcripts on `SessionEnd`). Ad-hoc tokenization of arbitrary text/files is exact when `ANTHROPIC_API_KEY` is set (Anthropic's free `count_tokens` API), otherwise a clearly-labelled local estimate.
+
+> **Note:** the commands above are now [skills](skills/) (`/stalker`, `/stalker-ui`, `/stalker-config`, `/stalker-tokens`, `/stalker-triage`) — same invocation, plus contextual auto-triggering.
 
 ### Configure Content Capture
 
@@ -138,12 +151,79 @@ Default capture rules:
 - **Search** — filter events by text across tool names, file paths, and commands
 - **Stats footer** — session count, total events, unique tools, agents, and tasks at a glance
 
+## Insights / meta-analysis
+
+The **Insights** view (toggle in the dashboard header, next to **Activity**) surfaces
+pockets of high thrash, churn, error, and token usage across your agentic workflows.
+It has two layers.
+
+Every Insights table is sortable (click a column header) and every row drills in —
+sessions open in the Activity view, single prompts/tasks open a detail modal, and
+aggregate rows (a file, tool, error cluster, topic, or retry chain) open a list of
+their underlying events.
+
+### Structured metrics (always on)
+
+Computed directly from the captured events — no extra setup, no external services:
+
+- **Pain leaderboard** — a per-session composite score combining error rate, file
+  churn, thrash, and effort, each normalized and weighted; every row shows an
+  explainable breakdown so you can see *why* a session scored high.
+- **Token usage** — real input/output/cache token totals per session (populated by
+  the usage ingest; see below).
+- **File churn** — files edited most often, with edit counts, the sessions touching
+  them, and the median gap between edits.
+- **Errors** — error counts by tool and by session (with error rate).
+- **Thrash / pivot-loops** — error→retry chains on the same tool+target, and task
+  status "bounces" (re-entering a status the task was already in).
+
+**Token usage capture:** real token counts come from the Claude Code transcript
+JSONL files, parsed into a `usage` table. This runs automatically on `SessionEnd`,
+or on demand:
+
+```bash
+bun run ingest-usage
+```
+
+Until a session's transcript has been ingested, the effort signal falls back to a
+byte-based proxy.
+
+### Semantic sidecar (opt-in)
+
+An optional Python layer adds NLP-based insight: frustration/sentiment, topic
+modeling, error clustering, and semantic pivot detection. It is **opt-in** and runs
+as a separate batch process that reads the same SQLite database and writes
+`semantic_*` tables; the dashboard hides these panels until they contain data.
+(Session **triage** is *not* part of this sidecar — it needs no API key and runs in
+Claude Code; see below.)
+
+To enable it, install the Python dependencies once:
+
+```bash
+pip install -r analysis/requirements.txt
+```
+
+Then click **Enable semantic features** in the Insights view (or run
+`python -m agent_stalker_analysis run` from `analysis/`). After it completes,
+refresh to see the **Topics**, **Error clusters**, **Frustration**, and
+**Agent pivots** panels populate.
+
+**Session triage (no API key):** each pain-leaderboard row has a **Flag for triage**
+button. Clicking it marks the session in the database; then run the packaged
+`/stalker-triage` skill in Claude Code, which reads the flagged sessions, scores
+each one's workflow pain, and writes a summary + root cause back so the dashboard's
+**Triage** panel shows them. No Anthropic API key and no token cost — the analysis runs
+in the Claude Code session you're already using.
+
+See [`analysis/README.md`](analysis/README.md) for the full sidecar install/run guide,
+the SQLite contract, and environment variables.
+
 ## Architecture
 
 ```
 hooks/tracker.ts          # Hook entrypoint — receives events via stdin
 lib/ingest.ts             # Parses hook payloads, writes to SQLite
-lib/db.ts                 # Database schema + migrations (v1-v5)
+lib/db.ts                 # Database schema + migrations (v1-v7)
 lib/query.ts              # CLI query engine
 lib/config.ts             # Content capture configuration
 lib/truncate.ts           # Content truncation per capture rules

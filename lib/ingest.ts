@@ -2,6 +2,7 @@ import { getDb } from "./db";
 import { getContentRule } from "./config";
 import { truncateContent } from "./truncate";
 import { resolveTeamContext } from "./resolve-team";
+import { ingestUsageForSession } from "./usage/ingest-usage";
 
 function ensureSession(event: Record<string, any>): void {
   const db = getDb();
@@ -40,13 +41,13 @@ function handleSessionStart(event: Record<string, any>): void {
   const existing = db.query("SELECT id FROM sessions WHERE id = ?").get(event.session_id);
   if (existing) {
     db.run(
-      "UPDATE sessions SET cwd = ?, permission_mode = ?, model = ?, agent_type = ?, started_at = ? WHERE id = ?",
-      [event.cwd, event.permission_mode, event.model ?? null, event.agent_type ?? null, Date.now(), event.session_id],
+      "UPDATE sessions SET cwd = ?, permission_mode = ?, model = ?, agent_type = ?, transcript_path = ?, started_at = ? WHERE id = ?",
+      [event.cwd, event.permission_mode, event.model ?? null, event.agent_type ?? null, event.transcript_path ?? null, Date.now(), event.session_id],
     );
   } else {
     db.run(
-      "INSERT INTO sessions (id, cwd, permission_mode, model, agent_type, started_at) VALUES (?, ?, ?, ?, ?, ?)",
-      [event.session_id, event.cwd, event.permission_mode, event.model ?? null, event.agent_type ?? null, Date.now()],
+      "INSERT INTO sessions (id, cwd, permission_mode, model, agent_type, transcript_path, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [event.session_id, event.cwd, event.permission_mode, event.model ?? null, event.agent_type ?? null, event.transcript_path ?? null, Date.now()],
     );
   }
   recordEvent(event, { source: event.source });
@@ -56,6 +57,9 @@ function handleSessionEnd(event: Record<string, any>): void {
   const db = getDb();
   db.run("UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ?", [Date.now(), event.reason, event.session_id]);
   recordEvent(event, { reason: event.reason });
+  try {
+    ingestUsageForSession(db, event.session_id);
+  } catch { /* usage ingest is best-effort */ }
 }
 
 function parseTaskIdFromResponse(response: any): string | null {

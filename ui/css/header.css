@@ -157,3 +157,28 @@
 .footer-spacer { flex: 1; }
 
 .footer-time { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.view-toggle {
+  display: inline-flex;
+  margin-right: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.view-btn {
+  padding: 4px 12px;
+  background: var(--bg-card);
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: color 0.2s, background 0.2s;
+}
+.view-btn:last-child { border-right: none; }
+.view-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.view-btn.active { background: var(--amber-dim); color: var(--amber-light); }
