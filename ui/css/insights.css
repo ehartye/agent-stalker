@@ -48,6 +48,14 @@
   box-shadow: var(--glow-green);
   flex: none;
 }
+/* Signal colour system — each Tier-2 section's header dot echoes the colour of
+   its bar in the Pain leaderboard, so the score's decomposition is legible at a
+   glance. No glow on signal dots; the green hero (Pain) keeps its glow. */
+.insights-section.sig-red    h3::before { background: var(--accent-red);    box-shadow: none; }
+.insights-section.sig-amber  h3::before { background: var(--accent-amber);  box-shadow: none; }
+.insights-section.sig-purple h3::before { background: var(--accent-purple); box-shadow: none; }
+.insights-section.sig-blue   h3::before { background: var(--accent-blue);   box-shadow: none; }
+.insights-section.sig-teal   h3::before { background: var(--accent-green);  box-shadow: none; opacity: 0.7; }
 
 /* Tables */
 .insights-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -205,3 +213,170 @@
 .insights-table thead th.sort-asc::after { content: ' ▲'; color: var(--amber); }
 .insights-table thead th.sort-desc::after { content: ' ▼'; color: var(--amber); }
 .insights-table tbody tr.is-drillable { cursor: pointer; }
+
+/* ── Tier rails: narrative dividers between Pain / Signals / Semantic ──────── */
+.insights-tier-rail {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 30px 2px 14px;
+}
+.insights-tier-rail:first-child { margin-top: 4px; }
+.insights-tier-rail .rail-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.insights-tier-rail .rail-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.insights-tier-rail .rail-rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border-bright), transparent);
+}
+
+/* Signal-colour legend in the breakdown rail */
+.signal-legend { display: flex; gap: 13px; white-space: nowrap; }
+.signal-legend .lg {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+}
+.signal-legend .lg::before {
+  content: '';
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+.signal-legend .lg.red::before    { background: var(--accent-red); }
+.signal-legend .lg.amber::before  { background: var(--accent-amber); }
+.signal-legend .lg.purple::before { background: var(--accent-purple); }
+.signal-legend .lg.blue::before   { background: var(--accent-blue); }
+
+/* Inline signal dots on the leaderboard column headers (rhyme with the bars) */
+.sig-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.sig-dot.red    { background: var(--accent-red); }
+.sig-dot.amber  { background: var(--accent-amber); }
+.sig-dot.purple { background: var(--accent-purple); }
+.sig-dot.blue   { background: var(--accent-blue); }
+
+/* ── Triage merged into the leaderboard ───────────────────────────────────── */
+.triage-col { white-space: nowrap; }
+.triage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.triage-pill.pending  { background: var(--amber-dim); color: var(--amber-light); border: 1px solid var(--amber-glow); }
+.triage-pill.analyzed { background: var(--accent-green-dim); color: var(--accent-green); border: 1px solid rgba(52, 211, 153, 0.25); }
+
+.triage-overflow { border-top: 1px solid var(--border); }
+.triage-overflow h4 {
+  margin: 0;
+  padding: 9px 16px 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+/* ── Tier 3: the semantic lens control bar ────────────────────────────────── */
+.semantic-lens-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 30px 0 14px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent-green);
+  border-radius: var(--radius);
+}
+.semantic-lens-bar.running { border-left-color: var(--amber); }
+.semantic-lens-bar .lens-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+}
+.semantic-lens-bar .lens-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: var(--glow-green);
+}
+.semantic-lens-bar.running .lens-dot { background: var(--amber); box-shadow: 0 0 8px var(--amber-glow); }
+.semantic-lens-bar .lens-title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+}
+.semantic-lens-bar .lens-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.semantic-lens-bar .lens-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.semantic-lens-bar .lens-state-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lens-spinner {
+  display: inline-block;
+  color: var(--amber);
+  animation: lens-spin 1s steps(8) infinite;
+}
+@keyframes lens-spin { to { transform: rotate(360deg); } }
+.lens-ticks { display: flex; gap: 10px; flex: none; }
+.lens-ticks .tick {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  cursor: default;
+}
+.lens-ticks .tick.ok  { color: var(--accent-green); }
+.lens-ticks .tick.bad { color: var(--text-dim); }
+
+/* The four semantic sections read as children of the lens bar above them. */
+.semantic-children { border-left: 2px solid var(--border); margin-left: 6px; padding-left: 14px; }
+.semantic-children.ghosted .insights-section.ghost { opacity: 0.5; }
