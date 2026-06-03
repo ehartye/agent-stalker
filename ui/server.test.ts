@@ -6,9 +6,10 @@ import { tmpdir } from "os";
 import { seedSession, seedToolFailure, seedToolCall } from "../lib/analytics/test-helpers";
 
 describe("server API", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-server-test-${Date.now()}.db`);
+  let testDbPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-server-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
     const db = getDb();
     // Seed test sessions
@@ -102,8 +103,9 @@ describe("server API", () => {
 });
 
 describe("insights endpoints", () => {
-  const testDbPath = join(tmpdir(), `as-server-insights-${Date.now()}.db`);
+  let testDbPath: string;
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-server-insights-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
     seedSession("s1");
     seedToolFailure("s1", "Edit", { file_path: "/a.ts" });
@@ -148,8 +150,11 @@ describe("insights endpoints", () => {
 });
 
 describe("semantic endpoints", () => {
-  const testDbPath = join(tmpdir(), `as-server-sem-${Date.now()}.db`);
-  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  let testDbPath: string;
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-server-sem-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+  });
   afterEach(() => {
     closeDb();
     for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }
@@ -197,8 +202,11 @@ describe("semantic endpoints", () => {
 });
 
 describe("constituent events endpoint", () => {
-  const testDbPath = join(tmpdir(), `as-server-eventsby-${Date.now()}.db`);
-  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  let testDbPath: string;
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-server-eventsby-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+  });
   afterEach(() => {
     closeDb();
     for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }

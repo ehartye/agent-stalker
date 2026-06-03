@@ -7,8 +7,11 @@ import { seedSession, seedToolCall, seedToolFailure } from "./test-helpers";
 import { sessionErrorStats, errorsByTool } from "./errors";
 
 describe("error metrics", () => {
-  const testDbPath = join(tmpdir(), `as-errors-${Date.now()}.db`);
-  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  let testDbPath: string;
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-errors-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+  });
   afterEach(() => {
     closeDb();
     for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }

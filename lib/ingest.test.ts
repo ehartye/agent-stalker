@@ -6,9 +6,10 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 describe("ingestEvent", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-ingest-${Date.now()}.db`);
+  let testDbPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-ingest-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
   });
 
@@ -347,9 +348,12 @@ describe("ingestEvent", () => {
 });
 
 describe("ingest capture additions", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-ingest-cap-${Date.now()}.db`);
+  let testDbPath: string;
 
-  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-ingest-cap-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+  });
   afterEach(() => {
     closeDb();
     try { unlinkSync(testDbPath); } catch {}

@@ -5,9 +5,10 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 describe("db", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-test-${Date.now()}.db`);
+  let testDbPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
   });
 

@@ -6,9 +6,10 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 describe("task lifecycle end-to-end", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-lifecycle-${Date.now()}.db`);
+  let testDbPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-lifecycle-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
     // Start a session
     ingestEvent({

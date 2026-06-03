@@ -7,8 +7,11 @@ import { seedSession, seedToolCall } from "./test-helpers";
 import { sessionEffort } from "./effort";
 
 describe("effort proxy", () => {
-  const testDbPath = join(tmpdir(), `as-effort-${Date.now()}.db`);
-  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  let testDbPath: string;
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-effort-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+  });
   afterEach(() => {
     closeDb();
     for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }

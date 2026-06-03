@@ -7,8 +7,11 @@ import { seedSession, seedToolCall, seedToolFailure, seedEvent } from "./test-he
 import { constituentEvents } from "./events-by";
 
 describe("constituentEvents", () => {
-  const testDbPath = join(tmpdir(), `as-eventsby-${Date.now()}.db`);
-  beforeEach(() => { process.env.AGENT_STALKER_DB_PATH = testDbPath; });
+  let testDbPath: string;
+  beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-eventsby-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    process.env.AGENT_STALKER_DB_PATH = testDbPath;
+  });
   afterEach(() => {
     closeDb();
     for (const s of ["", "-wal", "-shm"]) { try { unlinkSync(testDbPath + s); } catch {} }

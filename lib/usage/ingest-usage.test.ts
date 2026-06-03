@@ -6,10 +6,12 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 describe("ingestUsageForSession", () => {
-  const testDbPath = join(tmpdir(), `as-usage-job-${Date.now()}.db`);
-  const transcriptPath = join(tmpdir(), `as-transcript-${Date.now()}.jsonl`);
+  let testDbPath: string;
+  let transcriptPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `as-usage-job-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    transcriptPath = join(tmpdir(), `as-transcript-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
     writeFileSync(transcriptPath, [
       JSON.stringify({ type: "assistant", uuid: "a1", sessionId: "s1", timestamp: "2026-05-31T10:00:01.000Z", message: { usage: { input_tokens: 7, output_tokens: 3, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } } }),

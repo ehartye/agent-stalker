@@ -7,9 +7,10 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 describe("query", () => {
-  const testDbPath = join(tmpdir(), `agent-stalker-query-${Date.now()}.db`);
+  let testDbPath: string;
 
   beforeEach(() => {
+    testDbPath = join(tmpdir(), `agent-stalker-query-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     process.env.AGENT_STALKER_DB_PATH = testDbPath;
     // Seed data
     ingestEvent({ hook_event_name: "SessionStart", session_id: "s1", cwd: "/project-a", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
