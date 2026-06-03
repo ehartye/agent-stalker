@@ -279,7 +279,15 @@
 .sig-dot.blue   { background: var(--accent-blue); }
 
 /* ── Triage merged into the leaderboard ───────────────────────────────────── */
-.triage-col { white-space: nowrap; }
+/* The triage column is greedy (absorbs leftover table width) but bounded by it:
+   width:100% + max-width:0 lets the column take whatever space the fixed-content
+   columns leave, so the root cause shows in full when there's room and only
+   ellipsizes when it actually runs out. */
+.triage-col { white-space: nowrap; width: 100%; max-width: 0; }
+.triage-inline { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* The greedy triage column squeezes its siblings to min-content; keep the
+   session "repo-stub (id)" ref on one line so it doesn't wrap at the space. */
+.insights-table td.sess { white-space: nowrap; }
 .triage-pill {
   display: inline-flex;
   align-items: center;
@@ -295,10 +303,8 @@
 /* Root cause beside the score badge: single line, clean ellipsis when it
    overflows; the full text (and the summary) live on the hover title. */
 .triage-rc {
-  display: inline-block;
-  max-width: 300px;
-  margin-left: 8px;
-  vertical-align: middle;
+  flex: 1 1 auto;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

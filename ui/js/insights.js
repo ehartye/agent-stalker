@@ -1,5 +1,5 @@
 import { API, state } from './state.js';
-import { esc } from './util.js';
+import { esc, sessionRef } from './util.js';
 
 async function fetchJSON(url) {
   try { const r = await fetch(API + url); return r.ok ? await r.json() : null; } catch { return null; }
@@ -90,7 +90,7 @@ function renderPain(pain, triageBy) {
     const n = p.normalized || p.breakdown;
     return `
     <tr class="is-drillable" data-drill="session" data-session="${esc(p.session_id)}">
-      <td class="mono">${esc((p.session_id || '').slice(0, 8))}</td>
+      <td class="mono sess">${esc(sessionRef(p.session_id))}</td>
       <td><span class="pain-score">${p.score.toFixed(3)}</span></td>
       <td data-sort="${n.errorRate}"><span class="pain-cell">${bar(n.errorRate, '--accent-red')}</span></td>
       <td data-sort="${n.churn}"><span class="pain-cell">${bar(n.churn, '--accent-amber')}</span></td>
@@ -139,7 +139,7 @@ function triageCell(sessionId, triageBy) {
     // Keep the score in a compact coloured badge; render the root cause as
     // adjacent text that wraps and shows in full (summary stays on hover).
     const rc = t.root_cause ? `<span class="triage-rc" title="${esc(t.summary || '')}">${esc(t.root_cause)}</span>` : '';
-    return `<span class="triage-pill analyzed" title="${esc(t.summary || '')}">⚑ ${score}</span>${rc}`;
+    return `<div class="triage-inline"><span class="triage-pill analyzed" title="${esc(t.summary || '')}">⚑ ${score}</span>${rc}</div>`;
   }
   return `<span class="triage-pill pending" title="Run /stalker-triage in Claude Code to analyze this session">⚑ flagged · awaiting</span>`;
 }
@@ -148,7 +148,7 @@ function triageOverflowRow(t) {
   const analyzed = t.status === 'analyzed';
   const badge = analyzed ? `<span class="triage-badge done">analyzed</span>` : `<span class="triage-badge pending">flagged</span>`;
   return `<tr class="is-drillable" data-drill="session" data-session="${esc(t.session_id)}">
-    <td class="mono">${esc((t.session_id || '').slice(0, 8))}</td>
+    <td class="mono">${esc(sessionRef(t.session_id))}</td>
     <td>${badge}</td>
     <td>${analyzed && t.pain_score != null ? esc(String(t.pain_score)) + '/5' : '—'}</td>
     <td>${analyzed ? esc(t.summary || '') : ''}</td>
@@ -160,7 +160,7 @@ function triageOverflowRow(t) {
 function renderErrors(errors) {
   if (!errors) return section('Errors', '<p class="empty">No data yet.</p>', { signal: 'red' });
   const tool = (errors.byTool || []).slice(0, 10).map(t => `<tr class="is-drillable" data-drill="events" data-by="tool" data-value="${esc(t.tool_name)}" data-errors-only="1" data-drill-title="${esc(t.tool_name)} errors"><td>${esc(t.tool_name)}</td><td>${t.errors}</td></tr>`).join('');
-  const sess = (errors.bySession || []).slice(0, 10).map(s => `<tr class="is-drillable" data-drill="session" data-session="${esc(s.session_id)}"><td class="mono">${esc((s.session_id || '').slice(0,8))}</td><td>${s.errors}</td><td>${(s.errorRate*100).toFixed(1)}%</td></tr>`).join('');
+  const sess = (errors.bySession || []).slice(0, 10).map(s => `<tr class="is-drillable" data-drill="session" data-session="${esc(s.session_id)}"><td class="mono">${esc(sessionRef(s.session_id))}</td><td>${s.errors}</td><td>${(s.errorRate*100).toFixed(1)}%</td></tr>`).join('');
   return section('Errors',
     `<div class="insights-cols">
        <div><h4>By tool</h4><table class="insights-table"><thead><tr><th>Tool</th><th>Errors</th></tr></thead><tbody>${tool}</tbody></table></div>
@@ -179,9 +179,9 @@ function renderChurn(churn) {
 function renderThrash(thrash) {
   if (!thrash) return section('Thrash / pivot-loops', '<p class="empty">No data yet.</p>', { signal: 'purple' });
   const chains = (thrash.retryChains || []).slice(0, 15).map(c =>
-    `<tr class="is-drillable" data-drill="events" data-by="retry" data-value="${esc(c.target)}" data-tool="${esc(c.tool_name)}" data-retry-session="${esc(c.session_id)}" data-drill-title="retry: ${esc(c.tool_name)}"><td class="mono">${esc((c.session_id||'').slice(0,8))}</td><td>${esc(c.tool_name)}</td><td class="mono">${esc(String(c.target).slice(0,40))}</td><td>${c.chainLength}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="events" data-by="retry" data-value="${esc(c.target)}" data-tool="${esc(c.tool_name)}" data-retry-session="${esc(c.session_id)}" data-drill-title="retry: ${esc(c.tool_name)}"><td class="mono">${esc(sessionRef(c.session_id))}</td><td>${esc(c.tool_name)}</td><td class="mono">${esc(String(c.target).slice(0,40))}</td><td>${c.chainLength}</td></tr>`).join('');
   const bounces = (thrash.taskBounces || []).slice(0, 15).map(b =>
-    `<tr class="is-drillable" data-drill="task" data-task="${esc(b.task_id)}" data-session="${esc(b.session_id)}"><td class="mono">${esc(b.task_id)}</td><td class="mono">${esc((b.session_id||'').slice(0,8))}</td><td>${b.bounces}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="task" data-task="${esc(b.task_id)}" data-session="${esc(b.session_id)}"><td class="mono">${esc(b.task_id)}</td><td class="mono">${esc(sessionRef(b.session_id))}</td><td>${b.bounces}</td></tr>`).join('');
   const bouncesTable = bounces
     ? `<div><h4>Task bounces</h4><table class="insights-table"><thead><tr><th>Task</th><th>Session</th><th>Bounces</th></tr></thead><tbody>${bounces}</tbody></table></div>`
     : '';
@@ -192,7 +192,7 @@ function renderThrash(thrash) {
 function renderTokens(tokens) {
   if (!tokens || !tokens.length) return section('Effort (token usage)', '<p class="empty">Run usage ingest (SessionEnd or `bun run ingest-usage`) to populate.</p>', { signal: 'blue' });
   const rows = tokens.slice(0, 20).map(t =>
-    `<tr class="is-drillable" data-drill="session" data-session="${esc(t.session_id)}"><td class="mono">${esc((t.session_id || '').slice(0,8))}</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${t.cache_read_input_tokens}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="session" data-session="${esc(t.session_id)}"><td class="mono">${esc(sessionRef(t.session_id))}</td><td>${t.input_tokens}</td><td>${t.output_tokens}</td><td>${t.cache_read_input_tokens}</td></tr>`).join('');
   return section('Effort (token usage)',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Input</th><th>Output</th><th>Cache read</th></tr></thead><tbody>${rows}</tbody></table>`, { signal: 'blue' });
 }
@@ -321,7 +321,7 @@ function featureTicks(features) {
 function renderSentiment(rows) {
   if (!rows || !rows.length) return section('Frustration (most negative)', '<p class="empty">No results.</p>', { signal: 'teal' });
   const neg = rows.filter(r => r.label === 'negative').slice(0, 15).map(r =>
-    `<tr class="is-drillable" data-drill="event" data-event="${esc(r.event_id)}"><td class="mono">${esc((r.session_id||'').slice(0,8))}</td><td>${r.score.toFixed(2)}</td><td>${esc(r.source_kind)}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="event" data-event="${esc(r.event_id)}"><td class="mono">${esc(sessionRef(r.session_id))}</td><td>${r.score.toFixed(2)}</td><td>${esc(r.source_kind)}</td></tr>`).join('');
   if (!neg) return section('Frustration (most negative)', '<p class="empty">No negative entries.</p>', { signal: 'teal' });
   return section('Frustration (most negative)',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Score</th><th>Kind</th></tr></thead><tbody>${neg}</tbody></table>`, { signal: 'teal' });
@@ -346,7 +346,7 @@ function renderErrorClusters(rows) {
 function renderPivots(rows) {
   if (!rows || !rows.length) return section('Agent pivots (semantic)', '<p class="empty">No results.</p>', { signal: 'teal' });
   const body = rows.slice(0, 15).map(p =>
-    `<tr class="is-drillable" data-drill="session" data-session="${esc(p.session_id)}"><td class="mono">${esc((p.session_id||'').slice(0,8))}</td><td>${(p.confidence||0).toFixed(2)}</td><td>${esc(p.evidence||'')}</td></tr>`).join('');
+    `<tr class="is-drillable" data-drill="session" data-session="${esc(p.session_id)}"><td class="mono">${esc(sessionRef(p.session_id))}</td><td>${(p.confidence||0).toFixed(2)}</td><td>${esc(p.evidence||'')}</td></tr>`).join('');
   return section('Agent pivots (semantic)',
     `<table class="insights-table"><thead><tr><th>Session</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>${body}</tbody></table>`, { signal: 'teal' });
 }
