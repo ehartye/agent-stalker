@@ -2,7 +2,7 @@ import { state } from './state.js';
 import {
   loadSessions, loadSessionDetails, loadEvents, loadTools, loadStats, pollNewEvents, fetchJSON,
 } from './api.js';
-import { renderSessionDropdown } from './session-picker.js';
+import { renderSessionDropdown, clearSessionSelection } from './session-picker.js';
 import { renderChipBar } from './chip-bar.js';
 import { renderKanban } from './kanban.js';
 import { renderActivity } from './activity.js';
@@ -107,6 +107,12 @@ document.getElementById('insightsPanel').addEventListener('click', async (e) => 
 // Session dropdown
 document.getElementById('sessionDropdownTrigger').addEventListener('click', () => {
   document.getElementById('sessionDropdownPanel').classList.toggle('open');
+});
+// Clear-(x) button beside the picker — wipes the session selection
+document.getElementById('sessionClearBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('sessionDropdownPanel').classList.remove('open');
+  clearSessionSelection();
 });
 document.addEventListener('click', (e) => {
   const panel = document.getElementById('sessionDropdownPanel');

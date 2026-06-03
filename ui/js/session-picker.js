@@ -19,8 +19,25 @@ export function renderSessionDropdown() {
     label.textContent = `${count} sessions`;
   }
 
+  // The clear-(x) button is only useful when there is a selection to clear.
+  document.getElementById('sessionClearBtn').classList.toggle('visible', count > 0);
+
   renderSessionList('activeSessionList', state.activeSessions, 'activeSessionCount', false);
   renderSessionList('archivedSessionList', state.archivedSessions, 'archivedSessionCount', true);
+}
+
+// Clear the session filter entirely (deselect all) and reload the active view.
+export function clearSessionSelection() {
+  state.selectedSessionIds.clear();
+  state.agentFilters.clear();
+  state.toolChipFilters.clear();
+  state.eventTypeFilters.clear();
+  state.eventsFullyLoaded = false;
+  renderSessionDropdown();
+  loadSessionDetails();
+  loadEvents();
+  loadStats();
+  refreshInsightsIfActive();
 }
 
 function renderSessionList(listId, sessions, countId, isArchived) {
