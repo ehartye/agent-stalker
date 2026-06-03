@@ -63,6 +63,15 @@ export function sessionLabel(s) {
   return parts.pop() || s.id.slice(0, 12);
 }
 
+// Compact reference for a session by id alone (Insights tables only carry the
+// id): "repo-stub (id8)" when the session is loaded in state, else the bare id8.
+export function sessionRef(sessionId) {
+  const id8 = (sessionId || '').slice(0, 8);
+  const s = [...state.activeSessions, ...state.archivedSessions].find(x => x.id === sessionId);
+  const stub = s && s.cwd ? (s.cwd.split(/[\\/]/).filter(Boolean).pop() || null) : null;
+  return stub ? `${stub} (${id8})` : id8;
+}
+
 export function sessionLastEvent(s) {
   const ts = s.ended_at || s.started_at;
   if (!ts) return '';
