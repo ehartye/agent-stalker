@@ -197,6 +197,30 @@ describe("db", () => {
     });
   });
 
+  describe("migration robustness", () => {
+    it("keeps exactly one schema_version row after init", () => {
+      const db = getDb();
+      const rows = db.query("SELECT version FROM schema_version").all() as { version: number }[];
+      expect(rows.length).toBe(1);
+    });
+
+    it("collapses duplicate schema_version rows to the highest version", () => {
+      // An older (pre-transaction) concurrent init could leave more than one
+      // row; the immediate-transaction dedup pass must normalize to a single
+      // authoritative version on the next open.
+      const db1 = getDb();
+      const v = (db1.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number }).version;
+      db1.run("INSERT INTO schema_version (version) VALUES (?)", [v - 1]); // stray duplicate
+      expect((db1.query("SELECT COUNT(*) c FROM schema_version").get() as { c: number }).c).toBe(2);
+      closeDb();
+
+      const db2 = getDb(); // reopen → dedup runs
+      const rows = db2.query("SELECT version FROM schema_version").all() as { version: number }[];
+      expect(rows.length).toBe(1);
+      expect(rows[0].version).toBe(v);
+    });
+  });
+
   describe("v2 migration - data migration", () => {
     it("migrates existing v1 tasks data", () => {
       // Manually create a v1-only database, insert data, then run migration

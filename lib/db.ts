@@ -18,6 +18,33 @@ function runMigrations(db: Database): void {
     )
   `);
 
+  // Run the whole ladder under BEGIN IMMEDIATE so the write lock is held before
+  // the version is read: concurrent hook processes that open a not-yet-migrated
+  // DB serialize on the migrate-or-skip decision instead of racing into the same
+  // CREATE TABLE, and each migration's version bump commits atomically with its
+  // DDL (an interrupted run rolls back cleanly instead of wedging the next one).
+  // Explicit BEGIN/COMMIT via db.run (not db.transaction(), whose cached
+  // BEGIN/COMMIT statements can keep the DB file locked after close on Windows).
+  db.run("BEGIN IMMEDIATE");
+  try {
+    applyMigrations(db);
+    db.run("COMMIT");
+  } catch (e) {
+    db.run("ROLLBACK");
+    throw e;
+  }
+}
+
+function applyMigrations(db: Database): void {
+  // Collapse any duplicate rows left by an older (pre-transaction) concurrent
+  // init, keeping the highest version, so the gate reads one authoritative value.
+  const versions = db.query("SELECT version FROM schema_version").all() as { version: number }[];
+  if (versions.length > 1) {
+    const max = Math.max(...versions.map((v) => v.version));
+    db.run("DELETE FROM schema_version");
+    db.run("INSERT INTO schema_version (version) VALUES (?)", [max]);
+  }
+
   const row = db.query("SELECT version FROM schema_version LIMIT 1").get() as { version: number } | null;
   const currentVersion = row?.version ?? 0;
 
