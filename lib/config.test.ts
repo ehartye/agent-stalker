@@ -54,4 +54,10 @@ describe("config", () => {
     expect(config.ui.host).toBe("0.0.0.0");
     expect(config.ui.allowedHosts).toEqual([]);
   });
+
+  it("falls back to default ui when ui field is not an object", () => {
+    writeFileSync(testConfigPath, JSON.stringify({ ui: "127.0.0.1" }));
+    const config = getConfig();
+    expect(config.ui).toEqual({ host: "127.0.0.1", allowedHosts: [] });
+  });
 });

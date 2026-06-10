@@ -47,7 +47,9 @@ export function getConfig(): StalkerConfig {
     return {
       contentRules: { ...DEFAULT_CONFIG.contentRules, ...parsed.contentRules },
       pausedPaths: parsed.pausedPaths ?? [],
-      ui: { ...DEFAULT_CONFIG.ui, ...parsed.ui },
+      ui: (parsed.ui && typeof parsed.ui === "object" && !Array.isArray(parsed.ui))
+        ? { ...DEFAULT_CONFIG.ui, ...parsed.ui }
+        : DEFAULT_CONFIG.ui,
     };
   } catch {
     return DEFAULT_CONFIG;
