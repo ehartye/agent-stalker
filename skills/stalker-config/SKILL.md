@@ -16,11 +16,20 @@ Its shape (matches `lib/config.ts`):
 ```json
 {
   "contentRules": { "Bash": { "maxLength": 2000 }, "Read": "metadata", "Edit": "full" },
-  "pausedPaths": ["/abs/path/to/project"]
+  "pausedPaths": ["/abs/path/to/project"],
+  "ui": { "host": "127.0.0.1", "allowedHosts": [] }
 }
 ```
 
 A `contentRules` value is `"full"`, `"metadata"`, or `{ "maxLength": <n> }`. Preserve any existing keys when editing — read the file, merge, write it back.
+
+The `ui` section controls the dashboard server: `host` is the bind address
+(default `127.0.0.1`; set `0.0.0.0` to allow LAN access) and `allowedHosts`
+lists extra hostnames the dashboard may be browsed at (e.g. `["office-pc"]`
+for `http://office-pc:3141` — IPs and `localhost` always work).
+
+Note: the default capture rule for `Edit` and `Write` is now `metadata`
+(file contents not stored). `set Edit full` restores full capture.
 
 ## Behavior
 
@@ -42,7 +51,7 @@ The current working directory is available from the session context.
 
 | Tool | Rule |
 |------|------|
-| Edit, Write | full |
+| Edit, Write | metadata |
 | Read, Glob, Grep | metadata |
 | Bash | maxLength 2000 |
 | default (everything else) | maxLength 500 |

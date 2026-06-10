@@ -43,3 +43,9 @@ The default port is `3141`. After starting, tell the user the URL: `http://local
 
 - The dashboard serves the **Activity** view (session event stream, kanban tasks, filters) and the **Insights** view (pain leaderboard, churn, errors, thrash, token usage, and the opt-in semantic panels). Both are static files served fresh on reload.
 - The server reads the same SQLite database the hooks write to; it is read-only for tracked events.
+- The server binds `127.0.0.1` by default. For LAN access (e.g. viewing from
+  another machine), set `"ui": { "host": "0.0.0.0" }` in
+  `~/.claude/agent-stalker.config.json`, or pass `--host 0.0.0.0`. If browsing
+  by machine name rather than IP, also add the name to `ui.allowedHosts`.
+- If the port is already in use, the server prints a clear error and exits —
+  suggest `--port <number>` to the user.
