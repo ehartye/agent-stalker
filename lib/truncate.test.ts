@@ -19,6 +19,14 @@ describe("truncateContent", () => {
     expect(result.tool_response.data).toBeUndefined();
   });
 
+  it("strips old_string and new_string from Edit tool_input under metadata rule", () => {
+    const input = { file_path: "/foo.ts", old_string: "secret before", new_string: "secret after" };
+    const result = truncateContent("Edit", input, {}, "metadata");
+    expect(result.tool_input.file_path).toBe("/foo.ts");
+    expect(result.tool_input.old_string).toBeUndefined();
+    expect(result.tool_input.new_string).toBeUndefined();
+  });
+
   it("truncates content for maxLength rule", () => {
     const input = { command: "a".repeat(5000) };
     const response = { output: "b".repeat(5000) };
