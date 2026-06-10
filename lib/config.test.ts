@@ -42,4 +42,16 @@ describe("config", () => {
     const rule = getContentRule("SomeNewTool");
     expect(rule).toEqual({ maxLength: 500 });
   });
+
+  it("defaults ui to host 127.0.0.1 with no allowedHosts", () => {
+    const config = getConfig();
+    expect(config.ui).toEqual({ host: "127.0.0.1", allowedHosts: [] });
+  });
+
+  it("merges a partial ui section over defaults", () => {
+    writeFileSync(testConfigPath, JSON.stringify({ ui: { host: "0.0.0.0" } }));
+    const config = getConfig();
+    expect(config.ui.host).toBe("0.0.0.0");
+    expect(config.ui.allowedHosts).toEqual([]);
+  });
 });
