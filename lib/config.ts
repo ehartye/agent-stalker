@@ -16,8 +16,8 @@ export interface StalkerConfig {
 
 export const DEFAULT_CONFIG: StalkerConfig = {
   contentRules: {
-    Edit: "full",
-    Write: "full",
+    Edit: "metadata",
+    Write: "metadata",
     Read: "metadata",
     Glob: "metadata",
     Grep: "metadata",

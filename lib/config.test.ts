@@ -35,7 +35,12 @@ describe("config", () => {
 
   it("returns correct content rule for known tool", () => {
     const rule = getContentRule("Edit");
-    expect(rule).toBe("full");
+    expect(rule).toBe("metadata");
+  });
+
+  it("defaults Write capture to metadata", () => {
+    const rule = getContentRule("Write");
+    expect(rule).toBe("metadata");
   });
 
   it("returns default rule for unknown tool", () => {
