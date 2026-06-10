@@ -1,4 +1,5 @@
 import { getDb, closeDb } from "../lib/db";
+import { getConfig } from "../lib/config";
 import { join, resolve } from "path";
 import { existsSync } from "fs";
 import { spawn } from "child_process";
@@ -14,7 +15,7 @@ const port = parseInt(process.argv.find((_, i, a) => a[i - 1] === "--port") ?? "
 function jsonResponse(data: any, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -23,6 +24,31 @@ export function clampInt(raw: string | null, def: number, min: number, max: numb
   const n = parseInt(raw, 10);
   if (Number.isNaN(n)) return def;
   return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * DNS-rebinding guard: only serve requests whose Host header is localhost,
+ * an IP literal, or an explicitly allowlisted name (config ui.allowedHosts).
+ * A rebinding attack must use a DNS name, which this rejects.
+ */
+export function isAllowedHost(hostHeader: string | null, allowedHosts: string[]): boolean {
+  if (!hostHeader) return false;
+  // Strip the port: "[::1]:3141" -> "[::1]", "host:3141" -> "host"
+  let host = hostHeader;
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]");
+    if (end === -1) return false;
+    host = host.slice(0, end + 1);
+  } else {
+    const colon = host.indexOf(":");
+    if (colon !== -1) host = host.slice(0, colon);
+  }
+  if (host === "localhost") return true;
+  const bare = host.startsWith("[") ? host.slice(1, -1) : host;
+  if (allowedHosts.includes(host) || allowedHosts.includes(bare)) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true; // IPv4 literal
+  if (host.startsWith("[") && bare.includes(":")) return true; // IPv6 literal
+  return false;
 }
 
 function handleApi(url: URL, method: string): Response {
@@ -325,6 +351,7 @@ function flagTriage(sessionId: string): Response {
 }
 
 if (import.meta.main) {
+  const config = getConfig();
   const server = Bun.serve({
     port,
     // The semantic /run route awaits a Python dependency check that imports
@@ -332,6 +359,9 @@ if (import.meta.main) {
     // so the POST response isn't cut off before runSemanticBatch resolves.
     idleTimeout: 30,
     async fetch(req) {
+      if (!isAllowedHost(req.headers.get("host"), config.ui.allowedHosts)) {
+        return jsonResponse({ error: "Host not allowed. Add it to ui.allowedHosts in agent-stalker.config.json." }, 403);
+      }
       const url = new URL(req.url);
 
       if (url.pathname === "/api/insights/semantic/run" && req.method === "POST") {

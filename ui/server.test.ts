@@ -119,6 +119,12 @@ describe("server API", () => {
     const rows = await res.json();
     expect(rows.length).toBe(2);
   });
+
+  it("API responses carry no CORS header", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/stats"), "GET");
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
 });
 
 describe("insights endpoints", () => {
@@ -255,6 +261,26 @@ describe("clampInt", () => {
     const { clampInt } = await import("./server");
     expect(clampInt("12abc", 50, 1, 1000)).toBe(50);
   });
+});
+
+describe("isAllowedHost", () => {
+  const cases: Array<[string | null, string[], boolean]> = [
+    ["localhost:3141", [], true],
+    ["localhost", [], true],
+    ["127.0.0.1:3141", [], true],
+    ["[::1]:3141", [], true],
+    ["192.168.1.50:3141", [], true],
+    ["evil.example:3141", [], false],
+    ["office-pc:3141", [], false],
+    ["office-pc:3141", ["office-pc"], true],
+    [null, [], false],
+  ];
+  for (const [host, allowed, expected] of cases) {
+    it(`${host} with allowedHosts=${JSON.stringify(allowed)} -> ${expected}`, async () => {
+      const { isAllowedHost } = await import("./server");
+      expect(isAllowedHost(host, allowed)).toBe(expected);
+    });
+  }
 });
 
 describe("constituent events endpoint", () => {
