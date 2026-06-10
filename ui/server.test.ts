@@ -100,6 +100,31 @@ describe("server API", () => {
     // Expected order: sess-1 (latest event 3000) > sess-2 (started_at 2000, no events) > sess-3 (started_at 500, no events)
     expect(rows.map(r => r.id)).toEqual(["sess-1", "sess-2", "sess-3"]);
   });
+
+  it("GET /api/events with garbage limit/offset/since still returns 200", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/events?limit=abc&offset=-3&since=zzz"), "GET");
+    expect(res.status).toBe(200);
+    const rows = await res.json();
+    expect(Array.isArray(rows)).toBe(true);
+  });
+
+  it("caps limit: ?limit=2 returns exactly 2 rows even though more exist", async () => {
+    const db = getDb();
+    db.run("INSERT INTO events (session_id, hook_event_name, timestamp) VALUES ('sess-1', 'PreToolUse', 1001)");
+    db.run("INSERT INTO events (session_id, hook_event_name, timestamp) VALUES ('sess-1', 'PostToolUse', 1002)");
+    db.run("INSERT INTO events (session_id, hook_event_name, timestamp) VALUES ('sess-1', 'Stop', 1003)");
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/events?limit=2"), "GET");
+    const rows = await res.json();
+    expect(rows.length).toBe(2);
+  });
+
+  it("API responses carry no CORS header", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/stats"), "GET");
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
 });
 
 describe("insights endpoints", () => {
@@ -198,6 +223,96 @@ describe("semantic endpoints", () => {
     const row = getDb().query("SELECT status, flagged_at FROM semantic_session_triage WHERE session_id = ?").get("sess-flag") as any;
     expect(row.status).toBe("flagged");
     expect(row.flagged_at).toBeGreaterThan(0);
+  });
+});
+
+describe("clampInt", () => {
+  it("clamps above max", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("99999", 50, 1, 1000)).toBe(1000);
+  });
+
+  it("clamps below min", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("-5", 0, 0, Number.MAX_SAFE_INTEGER)).toBe(0);
+  });
+
+  it("returns default for non-numeric", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("abc", 50, 1, 1000)).toBe(50);
+  });
+
+  it("returns default for null", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt(null, 200, 1, 1000)).toBe(200);
+  });
+
+  it("returns default for scientific notation ('1e9')", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("1e9", 50, 1, 1000)).toBe(50);
+  });
+
+  it("returns default for hex ('0x10')", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("0x10", 50, 1, 1000)).toBe(50);
+  });
+
+  it("returns default for partial-numeric ('12abc')", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("12abc", 50, 1, 1000)).toBe(50);
+  });
+});
+
+describe("isAllowedHost", () => {
+  const cases: Array<[string | null, string[], boolean]> = [
+    ["localhost:3141", [], true],
+    ["localhost", [], true],
+    ["127.0.0.1:3141", [], true],
+    ["[::1]:3141", [], true],
+    ["192.168.1.50:3141", [], true],
+    ["evil.example:3141", [], false],
+    ["office-pc:3141", [], false],
+    ["office-pc:3141", ["office-pc"], true],
+    [null, [], false],
+    ["LOCALHOST:3141", [], true],                      // case-insensitive
+    ["localhost.", [], false],                          // trailing dot stays rejected
+    ["office-pc:3141", ["office-pc:3141"], true],       // port-bearing allowlist entry works
+    ["OFFICE-PC:3141", ["office-pc"], true],            // case-insensitive allowlist match
+  ];
+  for (const [host, allowed, expected] of cases) {
+    it(`${host} with allowedHosts=${JSON.stringify(allowed)} -> ${expected}`, async () => {
+      const { isAllowedHost } = await import("./server");
+      expect(isAllowedHost(host, allowed)).toBe(expected);
+    });
+  }
+});
+
+describe("resolveHost", () => {
+  const baseConfig = {
+    contentRules: {},
+    pausedPaths: [],
+    ui: { host: "0.0.0.0", allowedHosts: [] },
+  } as any;
+
+  it("--host flag beats config", async () => {
+    const { resolveHost } = await import("./server");
+    expect(resolveHost(["bun", "server.ts", "--host", "10.0.0.5"], baseConfig)).toBe("10.0.0.5");
+  });
+
+  it("config ui.host beats default", async () => {
+    const { resolveHost } = await import("./server");
+    expect(resolveHost(["bun", "server.ts"], baseConfig)).toBe("0.0.0.0");
+  });
+
+  it("falls back to 127.0.0.1", async () => {
+    const { resolveHost } = await import("./server");
+    const cfg = { ...baseConfig, ui: undefined };
+    expect(resolveHost(["bun", "server.ts"], cfg)).toBe("127.0.0.1");
+  });
+
+  it("ignores empty --host value", async () => {
+    const { resolveHost } = await import("./server");
+    expect(resolveHost(["bun", "server.ts", "--host", ""], baseConfig)).toBe("0.0.0.0");
   });
 });
 

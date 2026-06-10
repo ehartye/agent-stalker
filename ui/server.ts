@@ -1,4 +1,5 @@
 import { getDb, closeDb } from "../lib/db";
+import { getConfig, type StalkerConfig } from "../lib/config";
 import { join, resolve } from "path";
 import { existsSync } from "fs";
 import { spawn } from "child_process";
@@ -14,8 +15,55 @@ const port = parseInt(process.argv.find((_, i, a) => a[i - 1] === "--port") ?? "
 function jsonResponse(data: any, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    headers: { "Content-Type": "application/json" },
   });
+}
+
+export function clampInt(raw: string | null, def: number, min: number, max: number): number {
+  if (raw === null || !/^-?\d+$/.test(raw.trim())) return def;
+  const n = parseInt(raw, 10);
+  if (Number.isNaN(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
+/** Strip the port: "[::1]:3141" -> "[::1]", "host:3141" -> "host". Null for malformed bracket form. */
+function stripPort(value: string): string | null {
+  if (value.startsWith("[")) {
+    const end = value.indexOf("]");
+    if (end === -1) return null;
+    return value.slice(0, end + 1);
+  }
+  const colon = value.indexOf(":");
+  return colon === -1 ? value : value.slice(0, colon);
+}
+
+/**
+ * DNS-rebinding guard: only serve requests whose Host header is localhost,
+ * an IP literal, or an explicitly allowlisted name (config ui.allowedHosts).
+ * A rebinding attack must use a DNS name, which this rejects.
+ * Comparison is case-insensitive (host names are case-insensitive per DNS),
+ * and allowedHosts entries may include a port — it's ignored.
+ */
+export function isAllowedHost(hostHeader: string | null, allowedHosts: string[]): boolean {
+  if (!hostHeader) return false;
+  const stripped = stripPort(hostHeader);
+  if (stripped === null) return false;
+  const host = stripped.toLowerCase();
+  if (host === "localhost") return true;
+  const bare = host.startsWith("[") ? host.slice(1, -1) : host;
+  const allowed = allowedHosts
+    .map((a) => stripPort(a)?.toLowerCase())
+    .filter((a): a is string => a !== undefined && a !== null);
+  if (allowed.includes(host) || allowed.includes(bare)) return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true; // IPv4 literal
+  if (host.startsWith("[") && bare.includes(":")) return true; // IPv6 literal
+  return false;
+}
+
+export function resolveHost(argv: string[], config: StalkerConfig): string {
+  const flag = argv.find((_, i, a) => a[i - 1] === "--host");
+  if (flag !== undefined && flag !== "") return flag;
+  return config.ui?.host ?? "127.0.0.1";
 }
 
 function handleApi(url: URL, method: string): Response {
@@ -26,8 +74,8 @@ function handleApi(url: URL, method: string): Response {
   if (path === "/api/sessions") {
     const team = params.get("team");
     const archived = params.get("archived");
-    const limit = parseInt(params.get("limit") ?? "50");
-    const offset = parseInt(params.get("offset") ?? "0");
+    const limit = clampInt(params.get("limit"), 50, 1, 1000);
+    const offset = clampInt(params.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
     let query = "SELECT * FROM sessions WHERE 1=1";
     const qParams: any[] = [];
     if (archived === "true") {
@@ -85,23 +133,24 @@ function handleApi(url: URL, method: string): Response {
     const toolName = params.get("tool");
     const agentId = params.get("agent_id");
     const since = params.get("since");
-    const limit = parseInt(params.get("limit") ?? "200");
-    const offset = parseInt(params.get("offset") ?? "0");
+    const sinceTs = since === null ? null : clampInt(since, 0, 0, Number.MAX_SAFE_INTEGER);
+    const limit = clampInt(params.get("limit"), 200, 1, 1000);
+    const offset = clampInt(params.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
 
     let query = "SELECT * FROM events WHERE 1=1";
     const qParams: any[] = [];
     if (sessionId) { query += " AND session_id = ?"; qParams.push(sessionId); }
     if (toolName) { query += " AND tool_name = ?"; qParams.push(toolName); }
     if (agentId) { query += " AND agent_id = ?"; qParams.push(agentId); }
-    if (since) { query += " AND timestamp > ?"; qParams.push(parseInt(since)); }
-    const order = since ? "ASC" : "DESC";
+    if (sinceTs !== null) { query += " AND timestamp > ?"; qParams.push(sinceTs); }
+    const order = sinceTs !== null ? "ASC" : "DESC";
     query += ` ORDER BY timestamp ${order} LIMIT ? OFFSET ?`;
     qParams.push(limit, offset);
     return jsonResponse(db.query(query).all(...qParams));
   }
 
   if (path.startsWith("/api/events/")) {
-    const id = parseInt(path.split("/api/events/")[1]);
+    const id = clampInt(path.split("/api/events/")[1], 0, 0, Number.MAX_SAFE_INTEGER);
     const event = db.query("SELECT * FROM events WHERE id = ?").get(id);
     if (!event) return jsonResponse({ error: "Not found" }, 404);
     return jsonResponse(event);
@@ -317,45 +366,65 @@ function flagTriage(sessionId: string): Response {
 }
 
 if (import.meta.main) {
-  const server = Bun.serve({
-    port,
-    // The semantic /run route awaits a Python dependency check that imports
-    // heavy ML modules (can take >10s cold). Raise the default 10s idleTimeout
-    // so the POST response isn't cut off before runSemanticBatch resolves.
-    idleTimeout: 30,
-    async fetch(req) {
-      const url = new URL(req.url);
+  const config = getConfig();
+  const hostname = resolveHost(process.argv, config);
 
-      if (url.pathname === "/api/insights/semantic/run" && req.method === "POST") {
-        return runSemanticBatch();
-      }
+  let server;
+  try {
+    server = Bun.serve({
+      port,
+      hostname,
+      // The semantic /run route awaits a Python dependency check that imports
+      // heavy ML modules (can take >10s cold). Raise the default 10s idleTimeout
+      // so the POST response isn't cut off before runSemanticBatch resolves.
+      idleTimeout: 30,
+      async fetch(req) {
+        if (!isAllowedHost(req.headers.get("host"), config.ui.allowedHosts)) {
+          return jsonResponse({ error: "Host not allowed. Add it to ui.allowedHosts in agent-stalker.config.json." }, 403);
+        }
+        const url = new URL(req.url);
 
-      if (url.pathname === "/api/insights/semantic/triage" && req.method === "POST") {
-        const sessionId = url.searchParams.get("session");
-        if (!sessionId) return jsonResponse({ ok: false, message: "session required" }, 400);
-        return flagTriage(sessionId);
-      }
+        if (url.pathname === "/api/insights/semantic/run" && req.method === "POST") {
+          return runSemanticBatch();
+        }
 
-      if (url.pathname.startsWith("/api/")) {
-        return handleApi(url, req.method);
-      }
+        if (url.pathname === "/api/insights/semantic/triage" && req.method === "POST") {
+          const sessionId = url.searchParams.get("session");
+          if (!sessionId) return jsonResponse({ ok: false, message: "session required" }, 400);
+          return flagTriage(sessionId);
+        }
 
-      // Serve static files from ui/ directory
-      const pluginRoot = import.meta.dir;
-      let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
-      const fullPath = resolve(join(pluginRoot, filePath));
+        if (url.pathname.startsWith("/api/")) {
+          return handleApi(url, req.method);
+        }
 
-      // Prevent path traversal outside the ui/ directory
-      if (fullPath.startsWith(pluginRoot) && existsSync(fullPath)) {
-        return new Response(Bun.file(fullPath));
-      }
+        // Serve static files from ui/ directory
+        const pluginRoot = import.meta.dir;
+        let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
+        const fullPath = resolve(join(pluginRoot, filePath));
 
-      // Fallback to index.html for SPA routing
-      return new Response(Bun.file(join(pluginRoot, "index.html")));
-    },
-  });
+        // Prevent path traversal outside the ui/ directory
+        if (fullPath.startsWith(pluginRoot) && existsSync(fullPath)) {
+          return new Response(Bun.file(fullPath));
+        }
 
-  console.log(`agent-stalker UI running at http://localhost:${server.port}`);
+        // Fallback to index.html for SPA routing
+        return new Response(Bun.file(join(pluginRoot, "index.html")));
+      },
+    });
+  } catch (e: any) {
+    if (e?.code === "EADDRINUSE" || /in use/i.test(String(e?.message))) {
+      console.error(`Port ${port} already in use — is another stalker UI running? (use --port to change)`);
+      process.exit(1);
+    }
+    throw e;
+  }
+
+  const allInterfaces = hostname === "0.0.0.0" || hostname === "::";
+  console.log(
+    `agent-stalker UI running at http://${allInterfaces ? "localhost" : hostname}:${server.port}` +
+    (allInterfaces ? " (listening on all interfaces)" : ""),
+  );
 
   process.on("SIGINT", () => {
     closeDb();

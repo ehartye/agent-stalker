@@ -1,6 +1,6 @@
 import type { ContentRule } from "./config";
 
-const METADATA_STRIP_KEYS = new Set(["content", "data", "output", "text", "body", "result", "stdout", "stderr"]);
+const METADATA_STRIP_KEYS = new Set(["content", "data", "output", "text", "body", "result", "stdout", "stderr", "old_string", "new_string"]);
 
 const TRUNCATION_SUFFIX = "... [truncated]";
 

@@ -135,10 +135,18 @@ Real counts come from the `usage` table (parsed from transcripts on `SessionEnd`
 Default capture rules:
 | Tool | Rule |
 |------|------|
-| Edit, Write | full |
+| Edit, Write | metadata |
 | Read, Glob, Grep | metadata |
 | Bash | maxLength 2000 |
 | Everything else | maxLength 500 |
+
+> **What is captured:** events are stored in plaintext SQLite at
+> `~/.claude/agent-stalker.db`. By default file contents are **not** stored
+> (metadata only); opt into full capture per-tool with
+> `/stalker-config set Edit full`. The dashboard binds `127.0.0.1` — to view
+> it from another machine, set `"ui": { "host": "0.0.0.0" }` in
+> `~/.claude/agent-stalker.config.json`. If browsing by machine name rather
+> than IP, also add the name to `"allowedHosts"` (e.g. `["office-pc"]`).
 
 ## Dashboard Features
 

@@ -3,15 +3,21 @@ import { join } from "path";
 
 export type ContentRule = "full" | "metadata" | { maxLength: number };
 
+export interface UiConfig {
+  host: string;
+  allowedHosts: string[];
+}
+
 export interface StalkerConfig {
   contentRules: Record<string, ContentRule>;
   pausedPaths: string[];
+  ui: UiConfig;
 }
 
 export const DEFAULT_CONFIG: StalkerConfig = {
   contentRules: {
-    Edit: "full",
-    Write: "full",
+    Edit: "metadata",
+    Write: "metadata",
     Read: "metadata",
     Glob: "metadata",
     Grep: "metadata",
@@ -19,6 +25,7 @@ export const DEFAULT_CONFIG: StalkerConfig = {
     default: { maxLength: 500 },
   },
   pausedPaths: [],
+  ui: { host: "127.0.0.1", allowedHosts: [] },
 };
 
 function getConfigPath(): string {
@@ -40,6 +47,9 @@ export function getConfig(): StalkerConfig {
     return {
       contentRules: { ...DEFAULT_CONFIG.contentRules, ...parsed.contentRules },
       pausedPaths: parsed.pausedPaths ?? [],
+      ui: (parsed.ui && typeof parsed.ui === "object" && !Array.isArray(parsed.ui))
+        ? { ...DEFAULT_CONFIG.ui, ...parsed.ui }
+        : DEFAULT_CONFIG.ui,
     };
   } catch {
     return DEFAULT_CONFIG;
