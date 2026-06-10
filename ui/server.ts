@@ -26,26 +26,35 @@ export function clampInt(raw: string | null, def: number, min: number, max: numb
   return Math.min(max, Math.max(min, n));
 }
 
+/** Strip the port: "[::1]:3141" -> "[::1]", "host:3141" -> "host". Null for malformed bracket form. */
+function stripPort(value: string): string | null {
+  if (value.startsWith("[")) {
+    const end = value.indexOf("]");
+    if (end === -1) return null;
+    return value.slice(0, end + 1);
+  }
+  const colon = value.indexOf(":");
+  return colon === -1 ? value : value.slice(0, colon);
+}
+
 /**
  * DNS-rebinding guard: only serve requests whose Host header is localhost,
  * an IP literal, or an explicitly allowlisted name (config ui.allowedHosts).
  * A rebinding attack must use a DNS name, which this rejects.
+ * Comparison is case-insensitive (host names are case-insensitive per DNS),
+ * and allowedHosts entries may include a port — it's ignored.
  */
 export function isAllowedHost(hostHeader: string | null, allowedHosts: string[]): boolean {
   if (!hostHeader) return false;
-  // Strip the port: "[::1]:3141" -> "[::1]", "host:3141" -> "host"
-  let host = hostHeader;
-  if (host.startsWith("[")) {
-    const end = host.indexOf("]");
-    if (end === -1) return false;
-    host = host.slice(0, end + 1);
-  } else {
-    const colon = host.indexOf(":");
-    if (colon !== -1) host = host.slice(0, colon);
-  }
+  const stripped = stripPort(hostHeader);
+  if (stripped === null) return false;
+  const host = stripped.toLowerCase();
   if (host === "localhost") return true;
   const bare = host.startsWith("[") ? host.slice(1, -1) : host;
-  if (allowedHosts.includes(host) || allowedHosts.includes(bare)) return true;
+  const allowed = allowedHosts
+    .map((a) => stripPort(a)?.toLowerCase())
+    .filter((a): a is string => a !== undefined && a !== null);
+  if (allowed.includes(host) || allowed.includes(bare)) return true;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true; // IPv4 literal
   if (host.startsWith("[") && bare.includes(":")) return true; // IPv6 literal
   return false;

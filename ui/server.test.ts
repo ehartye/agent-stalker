@@ -274,6 +274,10 @@ describe("isAllowedHost", () => {
     ["office-pc:3141", [], false],
     ["office-pc:3141", ["office-pc"], true],
     [null, [], false],
+    ["LOCALHOST:3141", [], true],                      // case-insensitive
+    ["localhost.", [], false],                          // trailing dot stays rejected
+    ["office-pc:3141", ["office-pc:3141"], true],       // port-bearing allowlist entry works
+    ["OFFICE-PC:3141", ["office-pc"], true],            // case-insensitive allowlist match
   ];
   for (const [host, allowed, expected] of cases) {
     it(`${host} with allowedHosts=${JSON.stringify(allowed)} -> ${expected}`, async () => {
