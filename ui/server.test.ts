@@ -287,6 +287,30 @@ describe("isAllowedHost", () => {
   }
 });
 
+describe("resolveHost", () => {
+  const baseConfig = {
+    contentRules: {},
+    pausedPaths: [],
+    ui: { host: "0.0.0.0", allowedHosts: [] },
+  } as any;
+
+  it("--host flag beats config", async () => {
+    const { resolveHost } = await import("./server");
+    expect(resolveHost(["bun", "server.ts", "--host", "10.0.0.5"], baseConfig)).toBe("10.0.0.5");
+  });
+
+  it("config ui.host beats default", async () => {
+    const { resolveHost } = await import("./server");
+    expect(resolveHost(["bun", "server.ts"], baseConfig)).toBe("0.0.0.0");
+  });
+
+  it("falls back to 127.0.0.1", async () => {
+    const { resolveHost } = await import("./server");
+    const cfg = { ...baseConfig, ui: undefined };
+    expect(resolveHost(["bun", "server.ts"], cfg)).toBe("127.0.0.1");
+  });
+});
+
 describe("constituent events endpoint", () => {
   let testDbPath: string;
   beforeEach(() => {

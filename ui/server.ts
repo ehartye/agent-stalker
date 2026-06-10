@@ -1,5 +1,5 @@
 import { getDb, closeDb } from "../lib/db";
-import { getConfig } from "../lib/config";
+import { getConfig, type StalkerConfig } from "../lib/config";
 import { join, resolve } from "path";
 import { existsSync } from "fs";
 import { spawn } from "child_process";
@@ -58,6 +58,11 @@ export function isAllowedHost(hostHeader: string | null, allowedHosts: string[])
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true; // IPv4 literal
   if (host.startsWith("[") && bare.includes(":")) return true; // IPv6 literal
   return false;
+}
+
+export function resolveHost(argv: string[], config: StalkerConfig): string {
+  const flag = argv.find((_, i, a) => a[i - 1] === "--host");
+  return flag ?? config.ui?.host ?? "127.0.0.1";
 }
 
 function handleApi(url: URL, method: string): Response {
@@ -361,46 +366,58 @@ function flagTriage(sessionId: string): Response {
 
 if (import.meta.main) {
   const config = getConfig();
-  const server = Bun.serve({
-    port,
-    // The semantic /run route awaits a Python dependency check that imports
-    // heavy ML modules (can take >10s cold). Raise the default 10s idleTimeout
-    // so the POST response isn't cut off before runSemanticBatch resolves.
-    idleTimeout: 30,
-    async fetch(req) {
-      if (!isAllowedHost(req.headers.get("host"), config.ui.allowedHosts)) {
-        return jsonResponse({ error: "Host not allowed. Add it to ui.allowedHosts in agent-stalker.config.json." }, 403);
-      }
-      const url = new URL(req.url);
+  const hostname = resolveHost(process.argv, config);
 
-      if (url.pathname === "/api/insights/semantic/run" && req.method === "POST") {
-        return runSemanticBatch();
-      }
+  let server;
+  try {
+    server = Bun.serve({
+      port,
+      hostname,
+      // The semantic /run route awaits a Python dependency check that imports
+      // heavy ML modules (can take >10s cold). Raise the default 10s idleTimeout
+      // so the POST response isn't cut off before runSemanticBatch resolves.
+      idleTimeout: 30,
+      async fetch(req) {
+        if (!isAllowedHost(req.headers.get("host"), config.ui.allowedHosts)) {
+          return jsonResponse({ error: "Host not allowed. Add it to ui.allowedHosts in agent-stalker.config.json." }, 403);
+        }
+        const url = new URL(req.url);
 
-      if (url.pathname === "/api/insights/semantic/triage" && req.method === "POST") {
-        const sessionId = url.searchParams.get("session");
-        if (!sessionId) return jsonResponse({ ok: false, message: "session required" }, 400);
-        return flagTriage(sessionId);
-      }
+        if (url.pathname === "/api/insights/semantic/run" && req.method === "POST") {
+          return runSemanticBatch();
+        }
 
-      if (url.pathname.startsWith("/api/")) {
-        return handleApi(url, req.method);
-      }
+        if (url.pathname === "/api/insights/semantic/triage" && req.method === "POST") {
+          const sessionId = url.searchParams.get("session");
+          if (!sessionId) return jsonResponse({ ok: false, message: "session required" }, 400);
+          return flagTriage(sessionId);
+        }
 
-      // Serve static files from ui/ directory
-      const pluginRoot = import.meta.dir;
-      let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
-      const fullPath = resolve(join(pluginRoot, filePath));
+        if (url.pathname.startsWith("/api/")) {
+          return handleApi(url, req.method);
+        }
 
-      // Prevent path traversal outside the ui/ directory
-      if (fullPath.startsWith(pluginRoot) && existsSync(fullPath)) {
-        return new Response(Bun.file(fullPath));
-      }
+        // Serve static files from ui/ directory
+        const pluginRoot = import.meta.dir;
+        let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
+        const fullPath = resolve(join(pluginRoot, filePath));
 
-      // Fallback to index.html for SPA routing
-      return new Response(Bun.file(join(pluginRoot, "index.html")));
-    },
-  });
+        // Prevent path traversal outside the ui/ directory
+        if (fullPath.startsWith(pluginRoot) && existsSync(fullPath)) {
+          return new Response(Bun.file(fullPath));
+        }
+
+        // Fallback to index.html for SPA routing
+        return new Response(Bun.file(join(pluginRoot, "index.html")));
+      },
+    });
+  } catch (e: any) {
+    if (e?.code === "EADDRINUSE" || /in use/i.test(String(e?.message))) {
+      console.error(`Port ${port} already in use — is another stalker UI running? (use --port to change)`);
+      process.exit(1);
+    }
+    throw e;
+  }
 
   console.log(`agent-stalker UI running at http://localhost:${server.port}`);
 
