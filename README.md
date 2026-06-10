@@ -145,7 +145,8 @@ Default capture rules:
 > (metadata only); opt into full capture per-tool with
 > `/stalker-config set Edit full`. The dashboard binds `127.0.0.1` — to view
 > it from another machine, set `"ui": { "host": "0.0.0.0" }` in
-> `~/.claude/agent-stalker.config.json`.
+> `~/.claude/agent-stalker.config.json`. If browsing by machine name rather
+> than IP, also add the name to `"allowedHosts"` (e.g. `["office-pc"]`).
 
 ## Dashboard Features
 

@@ -1,7 +1,7 @@
 ---
 name: stalker-ui
 description: This skill should be used when the user runs "/stalker-ui" or asks to "start the agent-stalker dashboard", "open the stalker UI", "launch the tracking dashboard", "view tracked sessions in the browser", or "stop the stalker server". Starts (or stops) the agent-stalker web dashboard.
-argument-hint: "[stop] [--port <number>]"
+argument-hint: "[stop] [--port <number>] [--host <address>]"
 allowed-tools: ["Bash"]
 ---
 
