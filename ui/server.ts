@@ -62,7 +62,8 @@ export function isAllowedHost(hostHeader: string | null, allowedHosts: string[])
 
 export function resolveHost(argv: string[], config: StalkerConfig): string {
   const flag = argv.find((_, i, a) => a[i - 1] === "--host");
-  return flag ?? config.ui?.host ?? "127.0.0.1";
+  if (flag !== undefined && flag !== "") return flag;
+  return config.ui?.host ?? "127.0.0.1";
 }
 
 function handleApi(url: URL, method: string): Response {
@@ -419,7 +420,11 @@ if (import.meta.main) {
     throw e;
   }
 
-  console.log(`agent-stalker UI running at http://localhost:${server.port}`);
+  const allInterfaces = hostname === "0.0.0.0" || hostname === "::";
+  console.log(
+    `agent-stalker UI running at http://${allInterfaces ? "localhost" : hostname}:${server.port}` +
+    (allInterfaces ? " (listening on all interfaces)" : ""),
+  );
 
   process.on("SIGINT", () => {
     closeDb();

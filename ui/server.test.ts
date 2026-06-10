@@ -309,6 +309,11 @@ describe("resolveHost", () => {
     const cfg = { ...baseConfig, ui: undefined };
     expect(resolveHost(["bun", "server.ts"], cfg)).toBe("127.0.0.1");
   });
+
+  it("ignores empty --host value", async () => {
+    const { resolveHost } = await import("./server");
+    expect(resolveHost(["bun", "server.ts", "--host", ""], baseConfig)).toBe("0.0.0.0");
+  });
 });
 
 describe("constituent events endpoint", () => {
