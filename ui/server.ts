@@ -18,6 +18,12 @@ function jsonResponse(data: any, status = 200): Response {
   });
 }
 
+export function clampInt(raw: string | null, def: number, min: number, max: number): number {
+  const n = raw === null ? NaN : parseInt(raw, 10);
+  if (Number.isNaN(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
 function handleApi(url: URL, method: string): Response {
   const db = getDb();
   const path = url.pathname;
@@ -26,8 +32,8 @@ function handleApi(url: URL, method: string): Response {
   if (path === "/api/sessions") {
     const team = params.get("team");
     const archived = params.get("archived");
-    const limit = parseInt(params.get("limit") ?? "50");
-    const offset = parseInt(params.get("offset") ?? "0");
+    const limit = clampInt(params.get("limit"), 50, 1, 1000);
+    const offset = clampInt(params.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
     let query = "SELECT * FROM sessions WHERE 1=1";
     const qParams: any[] = [];
     if (archived === "true") {
@@ -85,23 +91,24 @@ function handleApi(url: URL, method: string): Response {
     const toolName = params.get("tool");
     const agentId = params.get("agent_id");
     const since = params.get("since");
-    const limit = parseInt(params.get("limit") ?? "200");
-    const offset = parseInt(params.get("offset") ?? "0");
+    const sinceTs = since === null ? null : clampInt(since, 0, 0, Number.MAX_SAFE_INTEGER);
+    const limit = clampInt(params.get("limit"), 200, 1, 1000);
+    const offset = clampInt(params.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
 
     let query = "SELECT * FROM events WHERE 1=1";
     const qParams: any[] = [];
     if (sessionId) { query += " AND session_id = ?"; qParams.push(sessionId); }
     if (toolName) { query += " AND tool_name = ?"; qParams.push(toolName); }
     if (agentId) { query += " AND agent_id = ?"; qParams.push(agentId); }
-    if (since) { query += " AND timestamp > ?"; qParams.push(parseInt(since)); }
-    const order = since ? "ASC" : "DESC";
+    if (sinceTs !== null) { query += " AND timestamp > ?"; qParams.push(sinceTs); }
+    const order = sinceTs !== null ? "ASC" : "DESC";
     query += ` ORDER BY timestamp ${order} LIMIT ? OFFSET ?`;
     qParams.push(limit, offset);
     return jsonResponse(db.query(query).all(...qParams));
   }
 
   if (path.startsWith("/api/events/")) {
-    const id = parseInt(path.split("/api/events/")[1]);
+    const id = clampInt(path.split("/api/events/")[1], 0, 0, Number.MAX_SAFE_INTEGER);
     const event = db.query("SELECT * FROM events WHERE id = ?").get(id);
     if (!event) return jsonResponse({ error: "Not found" }, 404);
     return jsonResponse(event);

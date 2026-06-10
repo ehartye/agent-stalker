@@ -100,6 +100,14 @@ describe("server API", () => {
     // Expected order: sess-1 (latest event 3000) > sess-2 (started_at 2000, no events) > sess-3 (started_at 500, no events)
     expect(rows.map(r => r.id)).toEqual(["sess-1", "sess-2", "sess-3"]);
   });
+
+  it("GET /api/events with garbage limit/offset/since still returns 200", async () => {
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/events?limit=abc&offset=-3&since=zzz"), "GET");
+    expect(res.status).toBe(200);
+    const rows = await res.json();
+    expect(Array.isArray(rows)).toBe(true);
+  });
 });
 
 describe("insights endpoints", () => {
@@ -198,6 +206,28 @@ describe("semantic endpoints", () => {
     const row = getDb().query("SELECT status, flagged_at FROM semantic_session_triage WHERE session_id = ?").get("sess-flag") as any;
     expect(row.status).toBe("flagged");
     expect(row.flagged_at).toBeGreaterThan(0);
+  });
+});
+
+describe("clampInt", () => {
+  it("clamps above max", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("99999", 50, 1, 1000)).toBe(1000);
+  });
+
+  it("clamps below min", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("-5", 0, 0, Number.MAX_SAFE_INTEGER)).toBe(0);
+  });
+
+  it("returns default for non-numeric", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("abc", 50, 1, 1000)).toBe(50);
+  });
+
+  it("returns default for null", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt(null, 200, 1, 1000)).toBe(200);
   });
 });
 
