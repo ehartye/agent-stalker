@@ -19,7 +19,8 @@ function jsonResponse(data: any, status = 200): Response {
 }
 
 export function clampInt(raw: string | null, def: number, min: number, max: number): number {
-  const n = raw === null ? NaN : parseInt(raw, 10);
+  if (raw === null || !/^-?\d+$/.test(raw.trim())) return def;
+  const n = parseInt(raw, 10);
   if (Number.isNaN(n)) return def;
   return Math.min(max, Math.max(min, n));
 }

@@ -108,6 +108,17 @@ describe("server API", () => {
     const rows = await res.json();
     expect(Array.isArray(rows)).toBe(true);
   });
+
+  it("caps limit: ?limit=2 returns exactly 2 rows even though more exist", async () => {
+    const db = getDb();
+    db.run("INSERT INTO events (session_id, hook_event_name, timestamp) VALUES ('sess-1', 'PreToolUse', 1001)");
+    db.run("INSERT INTO events (session_id, hook_event_name, timestamp) VALUES ('sess-1', 'PostToolUse', 1002)");
+    db.run("INSERT INTO events (session_id, hook_event_name, timestamp) VALUES ('sess-1', 'Stop', 1003)");
+    const { handleApiForTest } = await import("./server");
+    const res = handleApiForTest(new URL("http://x/api/events?limit=2"), "GET");
+    const rows = await res.json();
+    expect(rows.length).toBe(2);
+  });
 });
 
 describe("insights endpoints", () => {
@@ -228,6 +239,21 @@ describe("clampInt", () => {
   it("returns default for null", async () => {
     const { clampInt } = await import("./server");
     expect(clampInt(null, 200, 1, 1000)).toBe(200);
+  });
+
+  it("returns default for scientific notation ('1e9')", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("1e9", 50, 1, 1000)).toBe(50);
+  });
+
+  it("returns default for hex ('0x10')", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("0x10", 50, 1, 1000)).toBe(50);
+  });
+
+  it("returns default for partial-numeric ('12abc')", async () => {
+    const { clampInt } = await import("./server");
+    expect(clampInt("12abc", 50, 1, 1000)).toBe(50);
   });
 });
 
