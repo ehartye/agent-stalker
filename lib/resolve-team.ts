@@ -35,12 +35,17 @@ export function resolveTeamContext(event: Record<string, any>): TeamContext | nu
   const teamsDir = getTeamsDir();
   if (!existsSync(teamsDir)) return null;
 
+  let teamDirs: string[];
   try {
-    const teamDirs = readdirSync(teamsDir, { withFileTypes: true })
+    teamDirs = readdirSync(teamsDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
+  } catch {
+    return null; // teams dir unreadable
+  }
 
-    for (const teamName of teamDirs) {
+  for (const teamName of teamDirs) {
+    try {
       const configPath = join(teamsDir, teamName, "config.json");
       if (!existsSync(configPath)) continue;
 
@@ -50,9 +55,10 @@ export function resolveTeamContext(event: Record<string, any>): TeamContext | nu
       if (member) {
         return { team_name: teamName, teammate_name: member.name };
       }
+    } catch {
+      // One team's config is unreadable/malformed: skip it, keep scanning
+      continue;
     }
-  } catch {
-    // Scan failed, return null
   }
 
   return null;

@@ -48,4 +48,12 @@ describe("resolveTeamContext", () => {
     expect(result?.team_name).toBe("direct-team");
     expect(result?.teammate_name).toBe("direct-mate");
   });
+
+  it("skips a malformed team config and keeps scanning", () => {
+    mkdirSync(join(teamsDir, "a-broken"), { recursive: true });
+    writeFileSync(join(teamsDir, "a-broken", "config.json"), "{ not valid json !!");
+    const result = resolveTeamContext({ agent_id: "agent-abc" });
+    expect(result?.team_name).toBe("my-project");
+    expect(result?.teammate_name).toBe("researcher");
+  });
 });
