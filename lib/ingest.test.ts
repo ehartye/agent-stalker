@@ -263,6 +263,15 @@ describe("ingestEvent", () => {
     });
   });
 
+  it("drops an event with no session_id without inserting anything", () => {
+    ingestEvent({ hook_event_name: "PreToolUse", tool_name: "Bash" });
+    const db = getDb();
+    const count = db.query("SELECT COUNT(*) as c FROM events").get() as any;
+    expect(count.c).toBe(0);
+    const sessions = db.query("SELECT COUNT(*) as c FROM sessions").get() as any;
+    expect(sessions.c).toBe(0);
+  });
+
   describe("Task isolation across sessions", () => {
     it("allows same task number in different sessions", () => {
       ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-iso1", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
@@ -345,6 +354,31 @@ describe("ingestEvent", () => {
       expect(events.length).toBe(1);
     });
   });
+});
+
+describe("isValidEvent", () => {
+  it("accepts a minimal valid event", async () => {
+    const { isValidEvent } = await import("./ingest");
+    expect(isValidEvent({ session_id: "s1", hook_event_name: "SessionStart" })).toBe(true);
+  });
+
+  const invalid: Array<[string, unknown]> = [
+    ["null", null],
+    ["array", []],
+    ["string", "event"],
+    ["missing session_id", { hook_event_name: "SessionStart" }],
+    ["empty session_id", { session_id: "", hook_event_name: "SessionStart" }],
+    ["non-string session_id", { session_id: 42, hook_event_name: "SessionStart" }],
+    ["missing hook_event_name", { session_id: "s1" }],
+    ["empty hook_event_name", { session_id: "s1", hook_event_name: "" }],
+    ["non-string hook_event_name", { session_id: "s1", hook_event_name: { x: 1 } }],
+  ];
+  for (const [label, value] of invalid) {
+    it(`rejects ${label}`, async () => {
+      const { isValidEvent } = await import("./ingest");
+      expect(isValidEvent(value)).toBe(false);
+    });
+  }
 });
 
 describe("ingest capture additions", () => {

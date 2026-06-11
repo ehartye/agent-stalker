@@ -4,6 +4,14 @@ import { truncateContent } from "./truncate";
 import { resolveTeamContext } from "./resolve-team";
 import { ingestUsageForSession } from "./usage/ingest-usage";
 
+export function isValidEvent(event: unknown): event is Record<string, any> {
+  return (
+    typeof event === "object" && event !== null && !Array.isArray(event) &&
+    typeof (event as any).session_id === "string" && (event as any).session_id.length > 0 &&
+    typeof (event as any).hook_event_name === "string" && (event as any).hook_event_name.length > 0
+  );
+}
+
 function ensureSession(event: Record<string, any>): void {
   const db = getDb();
   const existing = db.query("SELECT id FROM sessions WHERE id = ?").get(event.session_id);
@@ -234,6 +242,10 @@ function handleGeneric(event: Record<string, any>): void {
 }
 
 export function ingestEvent(event: Record<string, any>): void {
+  if (!isValidEvent(event)) {
+    console.error("agent-stalker: dropped event (missing session_id/hook_event_name)");
+    return;
+  }
   switch (event.hook_event_name) {
     case "SessionStart":
       handleSessionStart(event);
