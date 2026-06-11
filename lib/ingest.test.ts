@@ -280,6 +280,23 @@ describe("ingestEvent", () => {
     });
   });
 
+  it("rolls back all writes when a handler fails mid-event", () => {
+    expect(() =>
+      ingestEvent({
+        hook_event_name: "TaskCompleted",
+        session_id: "sess-atomic",
+        cwd: "/tmp",
+        permission_mode: "default",
+        task_id: { bad: "object" },
+      }),
+    ).toThrow();
+    const db = getDb();
+    const session = db.query("SELECT * FROM sessions WHERE id = 'sess-atomic'").get();
+    expect(session).toBeNull();
+    const events = db.query("SELECT COUNT(*) as c FROM events WHERE session_id = 'sess-atomic'").get() as any;
+    expect(events.c).toBe(0);
+  });
+
   it("drops an event with no session_id without inserting anything", () => {
     ingestEvent({ hook_event_name: "PreToolUse", tool_name: "Bash" });
     const db = getDb();

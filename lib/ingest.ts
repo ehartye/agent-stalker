@@ -66,9 +66,6 @@ function handleSessionEnd(event: Record<string, any>): void {
   const db = getDb();
   db.run("UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ?", [Date.now(), event.reason, event.session_id]);
   recordEvent(event, { reason: event.reason });
-  try {
-    ingestUsageForSession(db, event.session_id);
-  } catch { /* usage ingest is best-effort */ }
 }
 
 function parseTaskIdFromResponse(response: any): string | null {
@@ -242,11 +239,7 @@ function handleGeneric(event: Record<string, any>): void {
   recordEvent(event, rest);
 }
 
-export function ingestEvent(event: Record<string, any>): void {
-  if (!isValidEvent(event)) {
-    console.error("agent-stalker: dropped event (missing session_id/hook_event_name)");
-    return;
-  }
+function dispatchEvent(event: Record<string, any>): void {
   switch (event.hook_event_name) {
     case "SessionStart":
       handleSessionStart(event);
@@ -274,5 +267,28 @@ export function ingestEvent(event: Record<string, any>): void {
     default:
       handleGeneric(event);
       break;
+  }
+}
+
+export function ingestEvent(event: Record<string, any>): void {
+  if (!isValidEvent(event)) {
+    console.error("agent-stalker: dropped event (missing session_id/hook_event_name)");
+    return;
+  }
+  const db = getDb();
+  db.run("BEGIN IMMEDIATE");
+  try {
+    dispatchEvent(event);
+    db.run("COMMIT");
+  } catch (e) {
+    db.run("ROLLBACK");
+    throw e; // tracker.ts logs ingest failures
+  }
+  // Post-commit, outside the transaction: transcript parsing is best-effort
+  // and must never roll back the session-end write.
+  if (event.hook_event_name === "SessionEnd") {
+    try {
+      ingestUsageForSession(db, event.session_id);
+    } catch { /* usage ingest is best-effort */ }
   }
 }
