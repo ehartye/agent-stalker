@@ -87,6 +87,23 @@ describe("ingestEvent", () => {
     expect(session.ended_at).not.toBeNull();
   });
 
+  it("SessionEnd without prior SessionStart creates the session row", () => {
+    ingestEvent({
+      hook_event_name: "SessionEnd",
+      session_id: "sess-end-only",
+      cwd: "/tmp/late",
+      permission_mode: "default",
+      reason: "clear",
+    });
+    const db = getDb();
+    const session = db.query("SELECT * FROM sessions WHERE id = 'sess-end-only'").get() as any;
+    expect(session).not.toBeNull();
+    expect(session.ended_at).not.toBeNull();
+    expect(session.end_reason).toBe("clear");
+    const events = db.query("SELECT COUNT(*) as c FROM events WHERE session_id = 'sess-end-only'").get() as any;
+    expect(events.c).toBe(1);
+  });
+
   it("records TaskCompleted event and creates task row", () => {
     ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-5", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
     ingestEvent({

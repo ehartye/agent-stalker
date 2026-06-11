@@ -62,6 +62,7 @@ function handleSessionStart(event: Record<string, any>): void {
 }
 
 function handleSessionEnd(event: Record<string, any>): void {
+  ensureSession(event);
   const db = getDb();
   db.run("UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ?", [Date.now(), event.reason, event.session_id]);
   recordEvent(event, { reason: event.reason });
