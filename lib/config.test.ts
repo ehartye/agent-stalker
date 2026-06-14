@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { getConfig, getContentRule, DEFAULT_CONFIG } from "./config";
+import { getConfig, getContentRule, DEFAULT_CONFIG, isPaused } from "./config";
 import { unlinkSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -64,5 +64,21 @@ describe("config", () => {
     writeFileSync(testConfigPath, JSON.stringify({ ui: "127.0.0.1" }));
     const config = getConfig();
     expect(config.ui).toEqual({ host: "127.0.0.1", allowedHosts: [] });
+  });
+
+  it("isPaused matches a backslash cwd against a forward-slash paused path", () => {
+    writeFileSync(testConfigPath, JSON.stringify({ pausedPaths: ["C:/repos/proj"] }));
+    expect(isPaused("C:\\repos\\proj")).toBe(true);
+    expect(isPaused("C:\\repos\\proj\\sub")).toBe(true);
+  });
+
+  it("isPaused matches a forward-slash cwd against a backslash paused path", () => {
+    writeFileSync(testConfigPath, JSON.stringify({ pausedPaths: ["C:\\repos\\proj"] }));
+    expect(isPaused("C:/repos/proj")).toBe(true);
+  });
+
+  it("isPaused does not match a sibling directory sharing a prefix", () => {
+    writeFileSync(testConfigPath, JSON.stringify({ pausedPaths: ["C:/repos/proj"] }));
+    expect(isPaused("C:\\repos\\proj2")).toBe(false);
   });
 });

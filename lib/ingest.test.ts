@@ -87,6 +87,23 @@ describe("ingestEvent", () => {
     expect(session.ended_at).not.toBeNull();
   });
 
+  it("SessionEnd without prior SessionStart creates the session row", () => {
+    ingestEvent({
+      hook_event_name: "SessionEnd",
+      session_id: "sess-end-only",
+      cwd: "/tmp/late",
+      permission_mode: "default",
+      reason: "clear",
+    });
+    const db = getDb();
+    const session = db.query("SELECT * FROM sessions WHERE id = 'sess-end-only'").get() as any;
+    expect(session).not.toBeNull();
+    expect(session.ended_at).not.toBeNull();
+    expect(session.end_reason).toBe("clear");
+    const events = db.query("SELECT COUNT(*) as c FROM events WHERE session_id = 'sess-end-only'").get() as any;
+    expect(events.c).toBe(1);
+  });
+
   it("records TaskCompleted event and creates task row", () => {
     ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-5", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
     ingestEvent({
@@ -263,6 +280,32 @@ describe("ingestEvent", () => {
     });
   });
 
+  it("rolls back all writes when a handler fails mid-event", () => {
+    expect(() =>
+      ingestEvent({
+        hook_event_name: "TaskCompleted",
+        session_id: "sess-atomic",
+        cwd: "/tmp",
+        permission_mode: "default",
+        task_id: { bad: "object" },
+      }),
+    ).toThrow();
+    const db = getDb();
+    const session = db.query("SELECT * FROM sessions WHERE id = 'sess-atomic'").get();
+    expect(session).toBeNull();
+    const events = db.query("SELECT COUNT(*) as c FROM events WHERE session_id = 'sess-atomic'").get() as any;
+    expect(events.c).toBe(0);
+  });
+
+  it("drops an event with no session_id without inserting anything", () => {
+    ingestEvent({ hook_event_name: "PreToolUse", tool_name: "Bash" });
+    const db = getDb();
+    const count = db.query("SELECT COUNT(*) as c FROM events").get() as any;
+    expect(count.c).toBe(0);
+    const sessions = db.query("SELECT COUNT(*) as c FROM sessions").get() as any;
+    expect(sessions.c).toBe(0);
+  });
+
   describe("Task isolation across sessions", () => {
     it("allows same task number in different sessions", () => {
       ingestEvent({ hook_event_name: "SessionStart", session_id: "sess-iso1", cwd: "/tmp", permission_mode: "default", source: "startup", model: "claude-sonnet-4-6" });
@@ -345,6 +388,31 @@ describe("ingestEvent", () => {
       expect(events.length).toBe(1);
     });
   });
+});
+
+describe("isValidEvent", () => {
+  it("accepts a minimal valid event", async () => {
+    const { isValidEvent } = await import("./ingest");
+    expect(isValidEvent({ session_id: "s1", hook_event_name: "SessionStart" })).toBe(true);
+  });
+
+  const invalid: Array<[string, unknown]> = [
+    ["null", null],
+    ["array", []],
+    ["string", "event"],
+    ["missing session_id", { hook_event_name: "SessionStart" }],
+    ["empty session_id", { session_id: "", hook_event_name: "SessionStart" }],
+    ["non-string session_id", { session_id: 42, hook_event_name: "SessionStart" }],
+    ["missing hook_event_name", { session_id: "s1" }],
+    ["empty hook_event_name", { session_id: "s1", hook_event_name: "" }],
+    ["non-string hook_event_name", { session_id: "s1", hook_event_name: { x: 1 } }],
+  ];
+  for (const [label, value] of invalid) {
+    it(`rejects ${label}`, async () => {
+      const { isValidEvent } = await import("./ingest");
+      expect(isValidEvent(value)).toBe(false);
+    });
+  }
 });
 
 describe("ingest capture additions", () => {

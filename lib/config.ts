@@ -63,9 +63,12 @@ export function getContentRule(toolName: string): ContentRule {
 
 export function isPaused(cwd: string): boolean {
   const config = getConfig();
-  return config.pausedPaths.some(
-    (p) => cwd === p || cwd.startsWith(p + "/"),
-  );
+  const norm = (s: string) => s.replace(/\\/g, "/").replace(/\/+$/, "");
+  const c = norm(cwd);
+  return config.pausedPaths.some((p) => {
+    const q = norm(p);
+    return c === q || c.startsWith(q + "/");
+  });
 }
 
 export function writeConfig(config: StalkerConfig): void {

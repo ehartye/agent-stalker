@@ -31,6 +31,7 @@
           {
             "type": "command",
             "command": "bun \"${CLAUDE_PLUGIN_ROOT}/hooks/tracker.ts\"",
+            "async": true,
             "timeout": 10
           }
         ]

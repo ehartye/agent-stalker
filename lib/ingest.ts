@@ -4,6 +4,14 @@ import { truncateContent } from "./truncate";
 import { resolveTeamContext } from "./resolve-team";
 import { ingestUsageForSession } from "./usage/ingest-usage";
 
+export function isValidEvent(event: unknown): event is Record<string, any> {
+  return (
+    typeof event === "object" && event !== null && !Array.isArray(event) &&
+    typeof (event as any).session_id === "string" && (event as any).session_id.length > 0 &&
+    typeof (event as any).hook_event_name === "string" && (event as any).hook_event_name.length > 0
+  );
+}
+
 function ensureSession(event: Record<string, any>): void {
   const db = getDb();
   const existing = db.query("SELECT id FROM sessions WHERE id = ?").get(event.session_id);
@@ -54,12 +62,10 @@ function handleSessionStart(event: Record<string, any>): void {
 }
 
 function handleSessionEnd(event: Record<string, any>): void {
+  ensureSession(event);
   const db = getDb();
   db.run("UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ?", [Date.now(), event.reason, event.session_id]);
   recordEvent(event, { reason: event.reason });
-  try {
-    ingestUsageForSession(db, event.session_id);
-  } catch { /* usage ingest is best-effort */ }
 }
 
 function parseTaskIdFromResponse(response: any): string | null {
@@ -233,7 +239,7 @@ function handleGeneric(event: Record<string, any>): void {
   recordEvent(event, rest);
 }
 
-export function ingestEvent(event: Record<string, any>): void {
+function dispatchEvent(event: Record<string, any>): void {
   switch (event.hook_event_name) {
     case "SessionStart":
       handleSessionStart(event);
@@ -261,5 +267,28 @@ export function ingestEvent(event: Record<string, any>): void {
     default:
       handleGeneric(event);
       break;
+  }
+}
+
+export function ingestEvent(event: Record<string, any>): void {
+  if (!isValidEvent(event)) {
+    console.error("agent-stalker: dropped event (missing session_id/hook_event_name)");
+    return;
+  }
+  const db = getDb();
+  db.run("BEGIN IMMEDIATE");
+  try {
+    dispatchEvent(event);
+    db.run("COMMIT");
+  } catch (e) {
+    db.run("ROLLBACK");
+    throw e; // tracker.ts logs ingest failures
+  }
+  // Post-commit, outside the transaction: transcript parsing is best-effort
+  // and must never roll back the session-end write.
+  if (event.hook_event_name === "SessionEnd") {
+    try {
+      ingestUsageForSession(db, event.session_id);
+    } catch { /* usage ingest is best-effort */ }
   }
 }
