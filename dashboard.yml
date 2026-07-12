@@ -1,0 +1,4 @@
+title: Agent Stalker
+blurb: A dashboard that watches what your robot helpers are doing while they work.
+tags: [tool, plugin]
+setup: bun install
