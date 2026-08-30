@@ -8,7 +8,7 @@
     {
       "name": "agent-stalker",
       "description": "Track agent team task assignment, messages, and tool use across Claude Code sessions",
-      "version": "0.2.0",
+      "version": "0.5.1",
       "source": "./"
     }
   ]
