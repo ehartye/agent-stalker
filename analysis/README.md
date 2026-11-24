@@ -49,6 +49,8 @@ empty, even before the sidecar is installed), so the sidecar only ever inserts.
 
 ## Install
 
+Requires Python 3.14.
+
 ```bash
 pip install -r requirements.txt
 ```
